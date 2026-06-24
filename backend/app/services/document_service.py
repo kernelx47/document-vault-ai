@@ -13,6 +13,8 @@ from app.schemas.document import (
     DocumentListResponse,
     DocumentStatusResponse,
     DocumentSummary,
+    DocumentUploadBatchFailure,
+    DocumentUploadBatchResponse,
     DocumentUploadResponse,
 )
 from app.workers.tasks import process_document_task
@@ -24,61 +26,136 @@ ALLOWED_CONTENT_TYPES = {
 ALLOWED_EXTENSIONS = {".pdf", ".docx"}
 
 
+class UploadValidationError(Exception):
+    def __init__(self, message: str):
+        self.message = message
+        super().__init__(message)
+
+
 class DocumentNotFoundError(Exception):
     pass
 
 
-async def create_document_upload(db: AsyncSession, file: UploadFile) -> DocumentUploadResponse:
-    settings = get_settings()
+def _validate_upload(file: UploadFile, content: bytes) -> tuple[str, str]:
     if file.content_type not in ALLOWED_CONTENT_TYPES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Unsupported file type. Upload a PDF or DOCX file.",
-        )
+        raise UploadValidationError("Unsupported file type. Upload a PDF or DOCX file.")
 
     extension = Path(file.filename or "").suffix.lower()
     if extension not in ALLOWED_EXTENSIONS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Unsupported file extension. Use .pdf or .docx.",
-        )
+        raise UploadValidationError("Unsupported file extension. Use .pdf or .docx.")
 
-    content = await file.read()
+    settings = get_settings()
     max_size = settings.max_upload_size_mb * 1024 * 1024
     if len(content) > max_size:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"File exceeds maximum size of {settings.max_upload_size_mb}MB.",
+        raise UploadValidationError(
+            f"File exceeds maximum size of {settings.max_upload_size_mb}MB."
         )
     if not content:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty.")
+        raise UploadValidationError("Uploaded file is empty.")
 
+    safe_name = Path(file.filename or "upload").name
+    return safe_name, file.content_type or "application/octet-stream"
+
+
+def _build_document_record(safe_name: str, content_type: str, content: bytes) -> Document:
+    settings = get_settings()
     upload_dir = Path(settings.upload_dir)
     upload_dir.mkdir(parents=True, exist_ok=True)
 
     document_id = uuid.uuid4()
-    safe_name = Path(file.filename or "upload").name
     stored_path = upload_dir / f"{document_id}_{safe_name}"
     stored_path.write_bytes(content)
 
-    document = Document(
+    return Document(
         id=document_id,
         filename=safe_name,
-        content_type=file.content_type,
+        content_type=content_type,
         file_path=str(stored_path),
         file_size_bytes=len(content),
         status=DocumentStatus.PENDING,
     )
+
+
+async def _queue_document(db: AsyncSession, document: Document) -> DocumentUploadResponse:
     db.add(document)
     await db.commit()
     await db.refresh(document)
-
     process_document_task.delay(str(document.id))
-
     return DocumentUploadResponse(
         id=document.id,
         filename=document.filename,
         status=document.status,
+    )
+
+
+async def create_document_upload(db: AsyncSession, file: UploadFile) -> DocumentUploadResponse:
+    content = await file.read()
+    try:
+        safe_name, content_type = _validate_upload(file, content)
+        document = _build_document_record(safe_name, content_type, content)
+    except UploadValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from exc
+
+    return await _queue_document(db, document)
+
+
+async def create_document_uploads_batch(
+    db: AsyncSession, files: list[UploadFile]
+) -> DocumentUploadBatchResponse:
+    settings = get_settings()
+
+    if not files:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No files provided.")
+    if len(files) > settings.max_batch_upload_files:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Maximum {settings.max_batch_upload_files} files per batch. "
+                "Split large uploads into multiple batch requests."
+            ),
+        )
+
+    accepted: list[DocumentUploadResponse] = []
+    failed: list[DocumentUploadBatchFailure] = []
+
+    for file in files:
+        filename = file.filename or "unknown"
+        try:
+            content = await file.read()
+            safe_name, content_type = _validate_upload(file, content)
+            document = _build_document_record(safe_name, content_type, content)
+            upload_response = await _queue_document(db, document)
+            accepted.append(upload_response)
+        except UploadValidationError as exc:
+            await db.rollback()
+            failed.append(DocumentUploadBatchFailure(filename=filename, error=exc.message))
+        except Exception:
+            await db.rollback()
+            failed.append(
+                DocumentUploadBatchFailure(
+                    filename=filename,
+                    error="Unexpected error while saving file.",
+                )
+            )
+
+    if not accepted:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="All uploads failed.",
+            headers={"X-Upload-Failures": str(len(failed))},
+        )
+
+    queued_count = len(accepted)
+    message = f"{queued_count} document(s) queued for processing."
+    if failed:
+        message += f" {len(failed)} file(s) failed validation."
+
+    return DocumentUploadBatchResponse(
+        accepted=accepted,
+        failed=failed,
+        queued_count=queued_count,
+        failed_count=len(failed),
+        message=message,
     )
 
 

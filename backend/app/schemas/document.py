@@ -13,6 +13,19 @@ class DocumentUploadResponse(BaseModel):
     message: str = "Document queued for processing"
 
 
+class DocumentUploadBatchFailure(BaseModel):
+    filename: str
+    error: str
+
+
+class DocumentUploadBatchResponse(BaseModel):
+    accepted: list[DocumentUploadResponse]
+    failed: list[DocumentUploadBatchFailure]
+    queued_count: int
+    failed_count: int
+    message: str
+
+
 class DocumentStatusResponse(BaseModel):
     id: UUID
     status: DocumentStatus

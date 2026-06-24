@@ -9,6 +9,7 @@ from app.schemas.document import (
     DocumentInsightsResponse,
     DocumentListResponse,
     DocumentStatusResponse,
+    DocumentUploadBatchResponse,
     DocumentUploadResponse,
 )
 from app.services import document_service
@@ -22,6 +23,18 @@ async def upload_document(
     db: AsyncSession = Depends(get_db),
 ) -> DocumentUploadResponse:
     return await document_service.create_document_upload(db, file)
+
+
+@router.post(
+    "/upload/batch",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=DocumentUploadBatchResponse,
+)
+async def upload_documents_batch(
+    files: list[UploadFile] = File(...),
+    db: AsyncSession = Depends(get_db),
+) -> DocumentUploadBatchResponse:
+    return await document_service.create_document_uploads_batch(db, files)
 
 
 @router.get("", response_model=DocumentListResponse)

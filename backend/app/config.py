@@ -18,6 +18,7 @@ class Settings(BaseSettings):
 
     upload_dir: str = "./uploads"
     max_upload_size_mb: int = 20
+    max_batch_upload_files: int = 25
 
     embedding_provider: str = "local"
     llm_provider: str = "openai"
