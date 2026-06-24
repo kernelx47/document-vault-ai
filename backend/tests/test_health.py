@@ -14,4 +14,9 @@ def test_health():
     client = TestClient(app)
     response = client.get("/api/v1/health")
     assert response.status_code == 200
-    assert response.json()["status"] == "ok"
+    data = response.json()
+    assert data["service"] == "document-vault-ai"
+    assert data["api"] == "ok"
+    assert data["status"] in {"ok", "degraded"}
+    assert data["database"] in {"ok", "error"}
+    assert data["redis"] in {"ok", "error"}
