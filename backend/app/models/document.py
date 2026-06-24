@@ -11,6 +11,7 @@ from app.models.enums import DocumentStatus
 
 if TYPE_CHECKING:
     from app.models.chunk import DocumentChunk
+    from app.models.chat import ChatSession
     from app.models.processing import ProcessingJob
 
 
@@ -54,5 +55,8 @@ class Document(Base):
         back_populates="document", cascade="all, delete-orphan"
     )
     processing_jobs: Mapped[list["ProcessingJob"]] = relationship(
+        back_populates="document", cascade="all, delete-orphan"
+    )
+    chat_sessions: Mapped[list["ChatSession"]] = relationship(
         back_populates="document", cascade="all, delete-orphan"
     )

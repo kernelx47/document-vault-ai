@@ -12,3 +12,8 @@ class ProcessingJobStatus(str, enum.Enum):
     STARTED = "started"
     COMPLETED = "completed"
     FAILED = "failed"
+
+
+class MessageRole(str, enum.Enum):
+    USER = "user"
+    ASSISTANT = "assistant"
