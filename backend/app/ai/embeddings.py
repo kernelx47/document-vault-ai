@@ -7,6 +7,10 @@ class EmbeddingProvider:
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
         raise NotImplementedError
 
+    def embed_query(self, text: str) -> list[float]:
+        vectors = self.embed_texts([text])
+        return vectors[0] if vectors else []
+
     @property
     def dimension(self) -> int:
         return get_settings().embedding_dimension
