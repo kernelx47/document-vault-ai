@@ -2,7 +2,6 @@
 name = "document-vault-ai"
 version = "0.1.0"
 description = "AI-powered document vault with RAG chat"
-readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.115.0",
@@ -14,6 +13,12 @@ dependencies = [
   "redis>=5.2.0",
   "pydantic-settings>=2.6.0",
   "python-multipart>=0.0.12",
+  "pgvector>=0.3.6",
+  "httpx>=0.28.0",
+]
+
+[project.optional-dependencies]
+ai = [
   "pdfplumber>=0.11.0",
   "python-docx>=1.1.0",
   "langchain>=0.3.0",
@@ -21,11 +26,7 @@ dependencies = [
   "langchain-google-genai>=2.0.0",
   "langchain-openai>=0.2.0",
   "sentence-transformers>=3.3.0",
-  "pgvector>=0.3.6",
-  "httpx>=0.28.0",
 ]
-
-[project.optional-dependencies]
 dev = [
   "pytest>=8.0.0",
   "pytest-asyncio>=0.24.0",
