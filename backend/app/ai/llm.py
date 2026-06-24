@@ -10,10 +10,32 @@ def generate_summary_and_insights(text: str) -> tuple[str, list[str]]:
     if not text.strip():
         return "", []
 
-    if settings.gemini_api_key and settings.llm_provider == "gemini":
+    if settings.llm_provider == "openai" and settings.openai_api_key:
+        return _generate_with_openai(text)
+    if settings.llm_provider == "gemini" and settings.gemini_api_key:
         return _generate_with_gemini(text)
 
     return _generate_fallback(text)
+
+
+def _generate_with_openai(text: str) -> tuple[str, list[str]]:
+    from langchain_openai import ChatOpenAI
+
+    settings = get_settings()
+    system_prompt, user_prompt = build_summary_prompt(text)
+    llm = ChatOpenAI(
+        model=settings.openai_model,
+        api_key=settings.openai_api_key,
+        temperature=0.2,
+    )
+    response = llm.invoke(
+        [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+    )
+    content = response.content if isinstance(response.content, str) else str(response.content)
+    return _parse_summary_response(content, text)
 
 
 def _generate_with_gemini(text: str) -> tuple[str, list[str]]:
