@@ -31,6 +31,12 @@ pip install -e ".[dev]"
 uvicorn app.main:app --reload --port 8000
 ```
 
+AI/document dependencies install separately in Phase 1:
+
+```bash
+pip install -e ".[ai]"
+```
+
 **Frontend**
 
 ```bash
@@ -51,4 +57,4 @@ docker-compose.yml
 
 ## Status
 
-Phase 0 scaffolding — API route stubs and frontend shell are in place. Document upload, RAG chat, and metrics logic come next.
+Phase 0 complete — stack verified with Docker Compose, health checks, Celery worker, and frontend shell. Document ingestion starts in Phase 1.
