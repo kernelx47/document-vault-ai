@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_db
+from app.schemas.chat import ChatSessionCreateResponse
 from app.schemas.document import (
     DocumentDetail,
     DocumentInsightsResponse,
@@ -12,7 +13,7 @@ from app.schemas.document import (
     DocumentUploadBatchResponse,
     DocumentUploadResponse,
 )
-from app.services import document_service
+from app.services import chat_service, document_service
 
 router = APIRouter()
 
@@ -68,3 +69,15 @@ async def get_document_insights(
     db: AsyncSession = Depends(get_db),
 ) -> DocumentInsightsResponse:
     return await document_service.get_document_insights(db, document_id)
+
+
+@router.post(
+    "/{document_id}/chat/sessions",
+    status_code=status.HTTP_201_CREATED,
+    response_model=ChatSessionCreateResponse,
+)
+async def create_document_chat_session(
+    document_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> ChatSessionCreateResponse:
+    return await chat_service.create_chat_session(db, document_id)
