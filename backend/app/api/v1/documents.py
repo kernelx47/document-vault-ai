@@ -1,9 +1,10 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Query, Request, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_db
+from app.services.rate_limit_service import enforce_upload_rate_limit
 from app.schemas.chat import ChatSessionCreateResponse
 from app.schemas.document import (
     DocumentDetail,
@@ -20,9 +21,12 @@ router = APIRouter()
 
 @router.post("/upload", status_code=status.HTTP_202_ACCEPTED, response_model=DocumentUploadResponse)
 async def upload_document(
+    request: Request,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
 ) -> DocumentUploadResponse:
+    client_ip = request.client.host if request.client else "unknown"
+    await enforce_upload_rate_limit(client_ip)
     return await document_service.create_document_upload(db, file)
 
 
@@ -32,9 +36,12 @@ async def upload_document(
     response_model=DocumentUploadBatchResponse,
 )
 async def upload_documents_batch(
+    request: Request,
     files: list[UploadFile] = File(...),
     db: AsyncSession = Depends(get_db),
 ) -> DocumentUploadBatchResponse:
+    client_ip = request.client.host if request.client else "unknown"
+    await enforce_upload_rate_limit(client_ip)
     return await document_service.create_document_uploads_batch(db, files)
 
 
