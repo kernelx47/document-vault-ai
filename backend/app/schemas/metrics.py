@@ -1,7 +1,11 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.schemas.openapi_examples import DOCUMENT_METRICS_EXAMPLE, PROCESSING_METRICS_EXAMPLE
 
 
 class DocumentMetricsResponse(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"examples": [DOCUMENT_METRICS_EXAMPLE]})
+
     total: int
     pending: int
     processing: int
@@ -19,6 +23,8 @@ class StageMetrics(BaseModel):
 
 
 class ProcessingMetricsResponse(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"examples": [PROCESSING_METRICS_EXAMPLE]})
+
     total_jobs: int
     started: int = 0
     completed: int = 0

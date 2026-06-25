@@ -4,9 +4,16 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.enums import DocumentStatus
+from app.schemas.openapi_examples import (
+    DOCUMENT_INSIGHTS_EXAMPLE,
+    DOCUMENT_STATUS_EXAMPLE,
+    DOCUMENT_UPLOAD_EXAMPLE,
+)
 
 
 class DocumentUploadResponse(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"examples": [DOCUMENT_UPLOAD_EXAMPLE]})
+
     id: UUID
     filename: str
     status: DocumentStatus
@@ -27,6 +34,8 @@ class DocumentUploadBatchResponse(BaseModel):
 
 
 class DocumentStatusResponse(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"examples": [DOCUMENT_STATUS_EXAMPLE]})
+
     id: UUID
     status: DocumentStatus
     error_message: str | None = None
@@ -59,6 +68,8 @@ class DocumentDetail(DocumentSummary):
 
 
 class DocumentInsightsResponse(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"examples": [DOCUMENT_INSIGHTS_EXAMPLE]})
+
     id: UUID
     status: DocumentStatus
     summary: str | None = None

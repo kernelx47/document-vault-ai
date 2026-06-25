@@ -4,6 +4,7 @@ from sqlalchemy import text
 
 from app.config import get_settings
 from app.db.session import engine
+from app.schemas.openapi_examples import HEALTH_EXAMPLE
 
 router = APIRouter()
 
@@ -30,7 +31,12 @@ async def _check_redis() -> str:
         await client.aclose()
 
 
-@router.get("/health")
+@router.get(
+    "/health",
+    summary="Health check",
+    description="Verify API, database, and Redis connectivity.",
+    responses={200: {"content": {"application/json": {"example": HEALTH_EXAMPLE}}}},
+)
 async def health_check() -> dict[str, str]:
     database = await _check_database()
     redis = await _check_redis()

@@ -13,6 +13,14 @@ def apply_migrations():
     command.upgrade(Config("alembic.ini"), "head")
 
 
+@pytest.fixture
+async def db_session():
+    from app.db.session import async_session_factory
+
+    async with async_session_factory() as session:
+        yield session
+
+
 @pytest.fixture(autouse=True)
 def bypass_upload_rate_limit():
     with patch(

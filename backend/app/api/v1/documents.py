@@ -19,7 +19,13 @@ from app.services import chat_service, document_service
 router = APIRouter()
 
 
-@router.post("/upload", status_code=status.HTTP_202_ACCEPTED, response_model=DocumentUploadResponse)
+@router.post(
+    "/upload",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=DocumentUploadResponse,
+    summary="Upload a document",
+    description="Upload a single PDF or DOCX file. Returns immediately with status `pending` while processing runs asynchronously.",
+)
 async def upload_document(
     request: Request,
     file: UploadFile = File(...),
@@ -70,7 +76,12 @@ async def get_document_status(
     return await document_service.get_document_status(db, document_id)
 
 
-@router.get("/{document_id}/insights", response_model=DocumentInsightsResponse)
+@router.get(
+    "/{document_id}/insights",
+    response_model=DocumentInsightsResponse,
+    summary="Get document insights",
+    description="Return AI-generated summary and bullet insights. Document must be in `ready` status.",
+)
 async def get_document_insights(
     document_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -82,6 +93,8 @@ async def get_document_insights(
     "/{document_id}/chat/sessions",
     status_code=status.HTTP_201_CREATED,
     response_model=ChatSessionCreateResponse,
+    summary="Start a chat session",
+    description="Create a new chat session for a processed document.",
 )
 async def create_document_chat_session(
     document_id: UUID,
