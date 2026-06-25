@@ -10,8 +10,9 @@ from app.db.base import Base
 from app.models.enums import DocumentStatus
 
 if TYPE_CHECKING:
-    from app.models.chunk import DocumentChunk
     from app.models.chat import ChatSession
+    from app.models.chat_session_document import ChatSessionDocument
+    from app.models.chunk import DocumentChunk
     from app.models.processing import ProcessingJob
 
 
@@ -58,5 +59,8 @@ class Document(Base):
         back_populates="document", cascade="all, delete-orphan"
     )
     chat_sessions: Mapped[list["ChatSession"]] = relationship(
+        back_populates="document", cascade="all, delete-orphan"
+    )
+    chat_session_links: Mapped[list["ChatSessionDocument"]] = relationship(
         back_populates="document", cascade="all, delete-orphan"
     )

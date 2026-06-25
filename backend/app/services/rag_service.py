@@ -19,8 +19,11 @@ class RetrievedChunk:
 
 
 async def retrieve_chunks(
-    db: AsyncSession, document_id: UUID, question: str
+    db: AsyncSession, document_ids: list[UUID], question: str
 ) -> list[RetrievedChunk]:
+    if not document_ids:
+        return []
+
     settings = get_settings()
     provider = get_embedding_provider()
     query_embedding = provider.embed_query(question)
@@ -28,7 +31,7 @@ async def retrieve_chunks(
     distance = DocumentChunk.embedding.cosine_distance(query_embedding)
     stmt = (
         select(DocumentChunk, (1 - distance).label("score"))
-        .where(DocumentChunk.document_id == document_id)
+        .where(DocumentChunk.document_id.in_(document_ids))
         .where(DocumentChunk.embedding.isnot(None))
         .order_by(distance)
         .limit(settings.rag_top_k)
@@ -77,11 +80,11 @@ def to_citations(retrieved: list[RetrievedChunk]) -> list[Citation]:
 
 async def generate_rag_answer(
     db: AsyncSession,
-    document_id: UUID,
+    document_ids: list[UUID],
     question: str,
     history_messages: list[ChatMessage],
 ) -> tuple[str, list[Citation], list[UUID]]:
-    retrieved = await retrieve_chunks(db, document_id, question)
+    retrieved = await retrieve_chunks(db, document_ids, question)
     context_blocks = build_context_blocks(retrieved)
     history_blocks = build_history_blocks(history_messages)
     system_prompt, user_prompt = build_chat_prompt(question, context_blocks, history_blocks)
@@ -89,3 +92,18 @@ async def generate_rag_answer(
     citations = to_citations(retrieved)
     chunk_ids = [item.chunk.id for item in retrieved]
     return answer, citations, chunk_ids
+
+
+async def prepare_rag_prompt(
+    db: AsyncSession,
+    document_ids: list[UUID],
+    question: str,
+    history_messages: list[ChatMessage],
+) -> tuple[list[RetrievedChunk], str, str, list[Citation], list[UUID]]:
+    retrieved = await retrieve_chunks(db, document_ids, question)
+    context_blocks = build_context_blocks(retrieved)
+    history_blocks = build_history_blocks(history_messages)
+    system_prompt, user_prompt = build_chat_prompt(question, context_blocks, history_blocks)
+    citations = to_citations(retrieved)
+    chunk_ids = [item.chunk.id for item in retrieved]
+    return retrieved, system_prompt, user_prompt, citations, chunk_ids

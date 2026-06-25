@@ -14,10 +14,10 @@ def build_summary_prompt(text: str, max_chars: int = 12000) -> tuple[str, str]:
     return SUMMARY_SYSTEM_PROMPT, SUMMARY_USER_PROMPT.format(text=excerpt)
 
 
-CHAT_SYSTEM_PROMPT = """You are a helpful assistant that answers questions about a document.
+CHAT_SYSTEM_PROMPT = """You are a helpful assistant that answers questions about one or more documents.
 Rules:
 - Answer ONLY using the provided context sources.
-- If the answer is not in the context, say: "I don't have enough information in this document."
+- If the answer is not in the context, say: "I don't have enough information in these documents."
 - Be concise and accurate.
 - Reference sources inline as [Source N] when using information from a source.
 """
@@ -30,6 +30,20 @@ Conversation history:
 
 Question: {question}
 """
+
+
+FOLLOWUP_SYSTEM_PROMPT = """You suggest helpful follow-up questions about a document conversation.
+Respond with JSON only: {"followups": ["question 1", "question 2", "question 3"]}
+Each follow-up must be short (under 80 chars), specific, and different from the original question."""
+
+FOLLOWUP_USER_PROMPT = """Original question: {question}
+Assistant answer: {answer}
+
+Suggest 3 follow-up questions the user might ask next."""
+
+
+def build_followup_prompt(question: str, answer: str) -> tuple[str, str]:
+    return FOLLOWUP_SYSTEM_PROMPT, FOLLOWUP_USER_PROMPT.format(question=question, answer=answer)
 
 
 def build_chat_prompt(

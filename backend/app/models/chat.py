@@ -10,6 +10,7 @@ from app.db.base import Base
 from app.models.enums import MessageRole
 
 if TYPE_CHECKING:
+    from app.models.chat_session_document import ChatSessionDocument
     from app.models.document import Document
 
 
@@ -32,6 +33,9 @@ class ChatSession(Base):
     )
 
     document: Mapped["Document"] = relationship(back_populates="chat_sessions")
+    session_documents: Mapped[list["ChatSessionDocument"]] = relationship(
+        back_populates="session", cascade="all, delete-orphan"
+    )
     messages: Mapped[list["ChatMessage"]] = relationship(
         back_populates="session", cascade="all, delete-orphan", order_by="ChatMessage.created_at"
     )
@@ -55,6 +59,7 @@ class ChatMessage(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     citations: Mapped[list[Any] | None] = mapped_column(JSONB, nullable=True)
     retrieved_chunk_ids: Mapped[list[Any] | None] = mapped_column(JSONB, nullable=True)
+    suggested_followups: Mapped[list[Any] | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

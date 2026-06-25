@@ -36,14 +36,7 @@ async def ready_document(db_session):
     return document, chunk
 
 
-@pytest.fixture
-async def db_session():
-    from app.db.session import async_session_factory
-
-    async with async_session_factory() as session:
-        yield session
-
-
+@patch("app.services.chat_service.generate_followup_suggestions", return_value=[])
 @patch("app.services.rag_service.generate_chat_answer")
 @patch("app.services.rag_service.retrieve_chunks")
 @pytest.mark.asyncio
@@ -77,6 +70,7 @@ async def test_create_chat_session(db_session, ready_document):
     assert session.document_id == document.id
 
 
+@patch("app.services.chat_service.generate_followup_suggestions", return_value=[])
 @pytest.mark.asyncio
 async def test_chat_history_persists_messages(db_session, ready_document):
     document, chunk = ready_document
