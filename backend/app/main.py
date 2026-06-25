@@ -8,6 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
 from app.config import get_settings
+from app.logging_config import configure_logging
+from app.middleware import register_exception_handlers, register_middleware
 
 
 def run_migrations() -> None:
@@ -26,6 +28,7 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    configure_logging(settings.log_level)
 
     app = FastAPI(
         title="Document Vault AI",
@@ -41,6 +44,9 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    register_middleware(app)
+    register_exception_handlers(app)
 
     app.include_router(api_router, prefix="/api/v1")
 
