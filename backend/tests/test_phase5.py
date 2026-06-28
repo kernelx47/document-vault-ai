@@ -49,7 +49,7 @@ async def test_create_multi_document_chat_session(db_session, two_ready_document
 
 
 @patch("app.services.chat_service.generate_followup_suggestions", return_value=["Follow up?"])
-@patch("app.services.rag_service.generate_chat_answer")
+@patch("app.ai.langchain_rag.generate_answer", new_callable=AsyncMock)
 @patch("app.services.rag_service.retrieve_chunks")
 @pytest.mark.asyncio
 async def test_multi_document_question_uses_all_document_ids(
@@ -85,7 +85,7 @@ async def test_multi_document_question_uses_all_document_ids(
     assert response.suggested_followups == ["Follow up?"]
 
 
-@patch("app.services.chat_service.stream_chat_answer")
+@patch("app.ai.langchain_rag.stream_answer")
 @patch("app.services.rag_service.retrieve_chunks")
 @pytest.mark.asyncio
 async def test_stream_question_answer_yields_tokens(
@@ -103,7 +103,11 @@ async def test_stream_question_answer_yields_tokens(
         embedding=[1.0] + [0.0] * 383,
     )
     mock_retrieve.return_value = [RetrievedChunk(chunk=chunk, score=0.9)]
-    mock_stream.return_value = iter(["Renewal ", "is December 2025."])
+    async def fake_stream(*args, **kwargs):
+        for token in ["Renewal ", "is December 2025."]:
+            yield token
+
+    mock_stream.side_effect = fake_stream
 
     session = await chat_service.create_multi_chat_session(
         db_session,

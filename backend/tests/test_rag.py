@@ -46,7 +46,7 @@ async def document_with_chunks(db_session):
     return document, chunk_renewal, chunk_other
 
 
-@patch("app.services.rag_service.get_embedding_provider")
+@patch("app.ai.retrieval.get_embedding_provider")
 @pytest.mark.asyncio
 async def test_retrieve_chunks_returns_relevant_matches(
     mock_get_provider, db_session, document_with_chunks
@@ -63,7 +63,7 @@ async def test_retrieve_chunks_returns_relevant_matches(
     assert retrieved[0].score >= 0.2
 
 
-@patch("app.services.rag_service.get_embedding_provider")
+@patch("app.ai.retrieval.get_embedding_provider")
 @pytest.mark.asyncio
 async def test_retrieve_chunks_filters_low_similarity(
     mock_get_provider, db_session, document_with_chunks

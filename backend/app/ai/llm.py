@@ -91,6 +91,28 @@ def generate_chat_answer(system_prompt: str, user_prompt: str) -> str:
     return _chat_fallback(user_prompt)
 
 
+def get_chat_llm():
+    settings = get_settings()
+
+    if settings.llm_provider == "openai" and settings.openai_api_key:
+        from langchain_openai import ChatOpenAI
+
+        return ChatOpenAI(
+            model=settings.openai_model,
+            api_key=settings.openai_api_key,
+            temperature=0.2,
+        )
+    if settings.llm_provider == "gemini" and settings.gemini_api_key:
+        from langchain_google_genai import ChatGoogleGenerativeAI
+
+        return ChatGoogleGenerativeAI(
+            model="gemini-2.0-flash",
+            google_api_key=settings.gemini_api_key,
+            temperature=0.2,
+        )
+    return None
+
+
 def _chat_with_openai(system_prompt: str, user_prompt: str) -> str:
     from langchain_openai import ChatOpenAI
 

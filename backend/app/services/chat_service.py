@@ -6,7 +6,8 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.ai.llm import generate_chat_answer, generate_followup_suggestions, stream_chat_answer
+from app.ai.langchain_rag import stream_answer as langchain_stream_answer
+from app.ai.llm import generate_followup_suggestions
 from app.config import get_settings
 from app.models import (
     ChatMessage,
@@ -25,7 +26,7 @@ from app.schemas.chat import (
     Citation,
     MultiChatSessionCreateRequest,
 )
-from app.services.rag_service import generate_rag_answer, prepare_rag_prompt
+from app.services.rag_service import generate_rag_answer, retrieve_chunks, to_citations
 
 
 async def create_chat_session(db: AsyncSession, document_id: uuid.UUID) -> ChatSessionCreateResponse:
@@ -122,12 +123,14 @@ async def stream_question_answer(
     session, history_messages, question = await _prepare_question(db, session_id, payload)
     document_ids = await _get_session_document_ids(db, session)
 
-    _, system_prompt, user_prompt, citations, chunk_ids = await prepare_rag_prompt(
-        db, document_ids, question, history_messages
-    )
+    retrieved = await retrieve_chunks(db, document_ids, question)
+    citations = to_citations(retrieved)
+    chunk_ids = [item.chunk.id for item in retrieved]
 
     answer_parts: list[str] = []
-    for token in stream_chat_answer(system_prompt, user_prompt):
+    async for token in langchain_stream_answer(
+        db, document_ids, question, history_messages, retrieved
+    ):
         answer_parts.append(token)
         yield token
 
