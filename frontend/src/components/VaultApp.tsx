@@ -367,7 +367,7 @@ export default function VaultApp() {
   const [docsLoaded, setDocsLoaded] = useState(false);
   const [sessions, setSessions] = useState<LocalSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-  const hydratedRef = useRef(false);
+  const [hydrated, setHydrated] = useState(false);
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -443,22 +443,22 @@ export default function VaultApp() {
       const storedActive = localStorage.getItem("vault-active-session");
       if (storedActive) setActiveSessionId(storedActive);
     } catch { /* ignore */ }
-    hydratedRef.current = true;
+    setHydrated(true);
   }, []);
 
   useEffect(() => {
-    if (!hydratedRef.current) return;
+    if (!hydrated) return;
     try {
       const toStore = sessions.map((s) => ({ ...s, messages: s.messages.map((m) => ({ ...m, streaming: false })) }));
       localStorage.setItem("vault-sessions", JSON.stringify(toStore));
     } catch { /* quota exceeded — ignore */ }
-  }, [sessions]);
+  }, [sessions, hydrated]);
 
   useEffect(() => {
-    if (!hydratedRef.current) return;
+    if (!hydrated) return;
     if (activeSessionId) localStorage.setItem("vault-active-session", activeSessionId);
     else localStorage.removeItem("vault-active-session");
-  }, [activeSessionId]);
+  }, [activeSessionId, hydrated]);
 
   async function loadDocumentInsights(documentId: string) {
     setActiveDocId(documentId);
