@@ -21,6 +21,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             return response
         finally:
             duration_ms = round((time.perf_counter() - started) * 1000, 2)
+            request_id = getattr(request.state, "request_id", None)
             if request.url.path.startswith("/api/"):
                 try:
                     await record_api_latency(
@@ -38,5 +39,6 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                     "status_code": status_code,
                     "duration_ms": duration_ms,
                     "client_ip": client_ip,
+                    "request_id": request_id,
                 },
             )

@@ -17,7 +17,10 @@ from app.schemas.document import (
     DocumentUploadBatchFailure,
     DocumentUploadBatchResponse,
     DocumentUploadResponse,
+    DocumentVersionListResponse,
 )
+from app.schemas.document_analysis import InsightsRegenerateRequest
+from app.ai.llm import regenerate_custom_summary
 from app.workers.tasks import process_document_task
 
 logger = logging.getLogger("app.documents")
@@ -72,6 +75,9 @@ def _build_document_record(safe_name: str, content_type: str, content: bytes) ->
         file_path=str(stored_path),
         file_size_bytes=len(content),
         status=DocumentStatus.PENDING,
+        document_group_id=document_id,
+        version_number=1,
+        is_latest=True,
     )
 
 
@@ -225,12 +231,53 @@ async def get_document_insights(
             status_code=status.HTTP_409_CONFLICT,
             detail="Document is not ready yet.",
         )
+    return _insights_from_document(document)
+
+
+def _insights_from_document(document: Document) -> DocumentInsightsResponse:
     return DocumentInsightsResponse(
         id=document.id,
         status=document.status,
         summary=document.summary,
         insights=document.insights or [],
+        category=document.category,
+        tags=[str(tag) for tag in (document.tags or [])],
+        sentiment=document.sentiment,
     )
+
+
+async def regenerate_document_insights(
+    db: AsyncSession,
+    document_id: uuid.UUID,
+    options: InsightsRegenerateRequest,
+) -> DocumentInsightsResponse:
+    from app.models import DocumentChunk
+
+    document = await _get_document_or_raise(db, document_id)
+    if document.status != DocumentStatus.READY:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Document is not ready yet.",
+        )
+
+    result = await db.execute(
+        select(DocumentChunk)
+        .where(DocumentChunk.document_id == document.id)
+        .order_by(DocumentChunk.chunk_index)
+    )
+    chunks = result.scalars().all()
+    combined_text = "\n".join(chunk.content for chunk in chunks)
+    summary, insights = regenerate_custom_summary(
+        combined_text,
+        length=options.length,
+        tone=options.tone,
+        focus_areas=options.focus_areas,
+    )
+    document.summary = summary
+    document.insights = insights
+    await db.commit()
+    await db.refresh(document)
+    return _insights_from_document(document)
 
 
 async def _get_document_or_raise(db: AsyncSession, document_id: uuid.UUID) -> Document:
@@ -238,3 +285,64 @@ async def _get_document_or_raise(db: AsyncSession, document_id: uuid.UUID) -> Do
     if document is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
     return document
+
+
+async def create_document_version(
+    db: AsyncSession, document_id: uuid.UUID, file: UploadFile
+) -> DocumentUploadResponse:
+    existing = await _get_document_or_raise(db, document_id)
+    try:
+        content = await file.read()
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to read uploaded file.") from exc
+
+    try:
+        safe_name, content_type = _validate_upload(file, content)
+        document = _build_document_record(safe_name, content_type, content)
+    except UploadValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.message) from exc
+
+    group_id = existing.document_group_id or existing.id
+    latest_version = await db.scalar(
+        select(func.max(Document.version_number)).where(Document.document_group_id == group_id)
+    )
+    document.document_group_id = group_id
+    document.version_number = int(latest_version or existing.version_number) + 1
+    document.is_latest = True
+
+    result = await db.execute(
+        select(Document).where(Document.document_group_id == group_id, Document.is_latest.is_(True))
+    )
+    for prior in result.scalars().all():
+        prior.is_latest = False
+        db.add(prior)
+
+    return await _queue_document(db, document)
+
+
+async def list_document_versions(db: AsyncSession, document_id: uuid.UUID) -> DocumentVersionListResponse:
+    from app.schemas.document import DocumentVersionSummary
+
+    document = await _get_document_or_raise(db, document_id)
+    group_id = document.document_group_id or document.id
+    result = await db.execute(
+        select(Document)
+        .where(Document.document_group_id == group_id)
+        .order_by(Document.version_number.desc())
+    )
+    versions = result.scalars().all()
+    return DocumentVersionListResponse(
+        document_group_id=group_id,
+        items=[
+            DocumentVersionSummary(
+                id=item.id,
+                filename=item.filename,
+                version_number=item.version_number,
+                is_latest=item.is_latest,
+                status=item.status,
+                created_at=item.created_at,
+            )
+            for item in versions
+        ],
+        total=len(versions),
+    )

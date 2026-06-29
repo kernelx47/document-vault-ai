@@ -140,8 +140,14 @@ async def ask_question(
 
     answer = await check_output_async(answer)
 
+    document_context, citation_context = await _build_followup_context(db, document_ids, citations)
     try:
-        followups = generate_followup_suggestions(question, answer)
+        followups = generate_followup_suggestions(
+            question,
+            answer,
+            document_context=document_context,
+            citation_context=citation_context,
+        )
     except Exception:
         logger.debug("Followup generation failed — continuing without suggestions", exc_info=True)
         followups = []
@@ -178,8 +184,14 @@ async def stream_question_answer(
         answer = "".join(answer_parts).strip() or "I don't have enough information in these documents."
         answer, citations, chunk_ids = finalize_rag_answer(retrieved, answer)
         answer = await check_output_async(answer)
+        document_context, citation_context = await _build_followup_context(db, document_ids, citations)
         try:
-            followups = generate_followup_suggestions(question, answer)
+            followups = generate_followup_suggestions(
+                question,
+                answer,
+                document_context=document_context,
+                citation_context=citation_context,
+            )
         except Exception:
             logger.debug("Followup generation failed during stream — continuing without suggestions", exc_info=True)
             followups = []
@@ -278,6 +290,41 @@ async def _save_assistant_message(
     return assistant_message
 
 
+async def _build_followup_context(
+    db: AsyncSession,
+    document_ids: list[uuid.UUID],
+    citations: list[Citation],
+) -> tuple[str, str]:
+    result = await db.execute(select(Document).where(Document.id.in_(document_ids)))
+    documents = result.scalars().all()
+    doc_lines: list[str] = []
+    for document in documents:
+        tag_text = ", ".join(str(tag) for tag in (document.tags or []))
+        line = (
+            f"- {document.filename} ({document.category or 'Uncategorized'}, "
+            f"sentiment: {document.sentiment or 'unknown'}"
+        )
+        if tag_text:
+            line += f", tags: {tag_text}"
+        if document.summary:
+            line += f"): {document.summary[:240]}"
+        else:
+            line += ")"
+        doc_lines.append(line)
+
+    document_context = "\n".join(doc_lines) if doc_lines else "No document metadata available."
+    citation_lines = [
+        f"- [Source {citation.source_index}] {citation.document_filename or 'document'}: "
+        f"{citation.excerpt[:160]}"
+        for citation in citations[:5]
+        if citation.source_index is not None
+    ]
+    citation_context = (
+        "\n".join(citation_lines) if citation_lines else "No citations in the last answer."
+    )
+    return document_context, citation_context
+
+
 async def _get_ready_documents(db: AsyncSession, document_ids: list[uuid.UUID]) -> list[Document]:
     if not document_ids:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No documents provided.")
@@ -342,11 +389,20 @@ def _to_message_response(
     elif message.suggested_followups:
         parsed_followups = [str(item) for item in message.suggested_followups]
 
+    parsed_chunk_ids: list[uuid.UUID] = []
+    if message.retrieved_chunk_ids:
+        for chunk_id in message.retrieved_chunk_ids:
+            try:
+                parsed_chunk_ids.append(uuid.UUID(str(chunk_id)))
+            except ValueError:
+                logger.debug("Skipping invalid retrieved_chunk_id: %s", chunk_id)
+
     return ChatMessageResponse(
         id=message.id,
         role=message.role,
         content=message.content,
         citations=parsed_citations,
+        retrieved_chunk_ids=parsed_chunk_ids,
         suggested_followups=parsed_followups,
         created_at=message.created_at,
     )

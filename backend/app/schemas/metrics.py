@@ -1,8 +1,14 @@
+from datetime import datetime
+from uuid import UUID
+
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.models.enums import ProcessingJobStatus
 from app.schemas.openapi_examples import (
     DOCUMENT_METRICS_EXAMPLE,
+    PROCESSING_HISTORY_EXAMPLE,
     PROCESSING_METRICS_EXAMPLE,
+    STORAGE_METRICS_EXAMPLE,
     SYSTEM_METRICS_EXAMPLE,
 )
 
@@ -62,6 +68,40 @@ class ProcessingMetricsResponse(BaseModel):
     )
 
 
+class StorageMetricsResponse(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"examples": [STORAGE_METRICS_EXAMPLE]})
+
+    total_file_bytes: int = Field(description="Sum of uploaded file sizes recorded in metadata.")
+    filesystem_bytes: int | None = Field(
+        default=None, description="Actual bytes on disk in the upload directory, when available."
+    )
+    total_chunks: int = Field(default=0, description="Indexed text chunks across all documents.")
+    total_chat_sessions: int = Field(default=0, description="Total chat sessions created.")
+    total_chat_messages: int = Field(default=0, description="Total chat messages stored.")
+    embedding_dimension: int = Field(description="Vector dimension used for chunk embeddings.")
+
+
+class ProcessingJobRecord(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    document_id: UUID
+    stage: str = Field(description="Pipeline stage (extract, chunk, embed, summarize).")
+    status: ProcessingJobStatus
+    duration_ms: int | None = Field(default=None, description="Stage duration in milliseconds.")
+    error_message: str | None = Field(default=None, description="Failure reason when status is `failed`.")
+    created_at: datetime
+
+
+class ProcessingHistoryResponse(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"examples": [PROCESSING_HISTORY_EXAMPLE]})
+
+    items: list[ProcessingJobRecord] = Field(description="Processing job records, newest first.")
+    total: int = Field(description="Total matching jobs.")
+    limit: int = Field(description="Maximum items returned.")
+    offset: int = Field(description="Pagination offset.")
+
+
 class SystemMetricsResponse(BaseModel):
     model_config = ConfigDict(json_schema_extra={"examples": [SYSTEM_METRICS_EXAMPLE]})
 
@@ -95,3 +135,31 @@ class SystemMetricsResponse(BaseModel):
         description="Average duration per pipeline stage.",
     )
     chat: ChatMetrics = Field(description="Rolling chat/RAG performance metrics.")
+
+
+class AIUsageByOperation(BaseModel):
+    operation: str
+    requests: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    estimated_cost_usd: float = 0.0
+
+
+class AIUsageByProvider(BaseModel):
+    provider: str
+    requests: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    estimated_cost_usd: float = 0.0
+
+
+class AIUsageMetricsResponse(BaseModel):
+    total_requests: int = 0
+    total_input_tokens: int = 0
+    total_output_tokens: int = 0
+    estimated_cost_usd: float = 0.0
+    daily_request_count: int = 0
+    daily_request_quota: int | None = None
+    daily_quota_remaining: int | None = None
+    by_operation: list[AIUsageByOperation] = Field(default_factory=list)
+    by_provider: list[AIUsageByProvider] = Field(default_factory=list)

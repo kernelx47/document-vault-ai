@@ -13,7 +13,32 @@ export type DocumentSummary = {
   status: string;
   file_size_bytes: number;
   chunk_count: number;
+  category?: string | null;
+  tags?: string[];
+  sentiment?: string | null;
   created_at: string;
+};
+
+export type DocumentInsights = {
+  id: string;
+  status: string;
+  summary: string | null;
+  insights: string[];
+  category: string | null;
+  tags: string[];
+  sentiment: string | null;
+};
+
+export type SummaryLength = "brief" | "standard" | "detailed";
+export type SummaryTone = "neutral" | "professional" | "executive" | "plain";
+
+export type DocumentCompareResult = {
+  summary: string;
+  similarities: string[];
+  differences: string[];
+  comparison_table: Array<{ aspect: string; values: Record<string, string> }>;
+  recommendation: string | null;
+  document_filenames: Record<string, string>;
 };
 
 export type DocumentListResponse = {
@@ -179,9 +204,206 @@ export async function streamChatMessage(
   }
 }
 
+export async function getDocumentInsights(documentId: string): Promise<DocumentInsights> {
+  const response = await fetch(`${API_BASE}/documents/${documentId}/insights`, {
+    cache: "no-store",
+  });
+  return parseJson(response);
+}
+
+export async function regenerateDocumentInsights(
+  documentId: string,
+  options: {
+    length?: SummaryLength;
+    tone?: SummaryTone;
+    focus_areas?: string[];
+  },
+): Promise<DocumentInsights> {
+  const response = await fetch(`${API_BASE}/documents/${documentId}/insights/regenerate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(options),
+  });
+  return parseJson(response);
+}
+
+export async function compareDocuments(
+  documentIds: string[],
+  focus?: string,
+): Promise<DocumentCompareResult> {
+  const response = await fetch(`${API_BASE}/documents/compare`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ document_ids: documentIds, focus: focus || null }),
+  });
+  return parseJson(response);
+}
+
 export async function getChatHistory(sessionId: string) {
   const response = await fetch(`${API_BASE}/chat/sessions/${sessionId}/messages`, {
     cache: "no-store",
   });
   return parseJson<{ messages: ChatMessage[] }>(response);
+}
+
+/* ─── Platform metrics ───────────────────────────────────────── */
+
+export type DocumentMetrics = {
+  total: number;
+  pending: number;
+  processing: number;
+  ready: number;
+  failed: number;
+  total_size_bytes: number;
+  total_chunks: number;
+};
+
+export type StageMetrics = {
+  stage: string;
+  completed: number;
+  failed: number;
+  avg_duration_ms: number | null;
+};
+
+export type ProcessingMetrics = {
+  total_jobs: number;
+  started: number;
+  completed: number;
+  failed: number;
+  avg_duration_ms: number | null;
+  failure_rate: number;
+  by_stage: StageMetrics[];
+};
+
+export type ProcessingJobRecord = {
+  id: string;
+  document_id: string;
+  stage: string;
+  status: string;
+  duration_ms: number | null;
+  error_message: string | null;
+  created_at: string;
+};
+
+export type ProcessingHistory = {
+  items: ProcessingJobRecord[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+export type StorageMetrics = {
+  total_file_bytes: number;
+  filesystem_bytes: number | null;
+  total_chunks: number;
+  total_chat_sessions: number;
+  total_chat_messages: number;
+  embedding_dimension: number;
+};
+
+export type RouteLatencyMetrics = {
+  route: string;
+  avg_duration_ms: number | null;
+  p95_duration_ms: number | null;
+  sample_count: number;
+};
+
+export type ChatMetrics = {
+  total_requests: number;
+  error_count: number;
+  error_rate: number;
+  avg_rag_duration_ms: number | null;
+  avg_retrieval_duration_ms: number | null;
+};
+
+export type SystemMetrics = {
+  avg_api_latency_ms: number | null;
+  p95_api_latency_ms: number | null;
+  api_request_samples: number;
+  api_latency_by_route: RouteLatencyMetrics[];
+  worker_queue_depth: number;
+  documents_per_hour: number;
+  document_failure_rate: number;
+  processing_failure_rate: number;
+  avg_processing_duration_ms: number | null;
+  stage_avg_duration_ms: StageMetrics[];
+  chat: ChatMetrics;
+};
+
+export type AIUsageByOperation = {
+  operation: string;
+  requests: number;
+  input_tokens: number;
+  output_tokens: number;
+  estimated_cost_usd: number;
+};
+
+export type AIUsageByProvider = {
+  provider: string;
+  requests: number;
+  input_tokens: number;
+  output_tokens: number;
+  estimated_cost_usd: number;
+};
+
+export type AIUsageMetrics = {
+  total_requests: number;
+  total_input_tokens: number;
+  total_output_tokens: number;
+  estimated_cost_usd: number;
+  daily_request_count: number;
+  daily_request_quota: number | null;
+  daily_quota_remaining: number | null;
+  by_operation: AIUsageByOperation[];
+  by_provider: AIUsageByProvider[];
+};
+
+export type PlatformMetricsSnapshot = {
+  documents: DocumentMetrics;
+  processing: ProcessingMetrics;
+  processingHistory: ProcessingHistory;
+  storage: StorageMetrics;
+  system: SystemMetrics;
+  aiUsage: AIUsageMetrics;
+};
+
+async function fetchMetrics<T>(path: string): Promise<T> {
+  const response = await fetch(`${API_BASE}/metrics${path}`, { cache: "no-store" });
+  return parseJson(response);
+}
+
+export async function getDocumentMetrics(): Promise<DocumentMetrics> {
+  return fetchMetrics("/documents");
+}
+
+export async function getProcessingMetrics(): Promise<ProcessingMetrics> {
+  return fetchMetrics("/processing");
+}
+
+export async function getProcessingHistory(limit = 20): Promise<ProcessingHistory> {
+  return fetchMetrics(`/processing/history?limit=${limit}`);
+}
+
+export async function getStorageMetrics(): Promise<StorageMetrics> {
+  return fetchMetrics("/storage");
+}
+
+export async function getSystemMetrics(): Promise<SystemMetrics> {
+  return fetchMetrics("/system");
+}
+
+export async function getAIUsageMetrics(): Promise<AIUsageMetrics> {
+  return fetchMetrics("/ai-usage");
+}
+
+export async function getPlatformMetricsSnapshot(): Promise<PlatformMetricsSnapshot> {
+  const [documents, processing, processingHistory, storage, system, aiUsage] = await Promise.all([
+    getDocumentMetrics(),
+    getProcessingMetrics(),
+    getProcessingHistory(),
+    getStorageMetrics(),
+    getSystemMetrics(),
+    getAIUsageMetrics(),
+  ]);
+  return { documents, processing, processingHistory, storage, system, aiUsage };
 }

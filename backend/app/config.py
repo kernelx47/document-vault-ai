@@ -22,8 +22,16 @@ class Settings(BaseSettings):
     max_batch_upload_files: int = 25
     max_multi_doc_chat_documents: int = 10
     upload_rate_limit_per_minute: int = 30
+    chat_rate_limit_per_minute: int = 60
+    daily_ai_request_quota: int = 1000
+    embedding_batch_size: int = 32
 
     log_level: str = "INFO"
+
+    openai_input_cost_per_1m_tokens: float = 0.15
+    openai_output_cost_per_1m_tokens: float = 0.60
+    gemini_input_cost_per_1m_tokens: float = 0.075
+    gemini_output_cost_per_1m_tokens: float = 0.30
 
     embedding_provider: str = "local"
     llm_provider: str = "openai"

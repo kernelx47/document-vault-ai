@@ -1,14 +1,19 @@
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Document, DocumentStatus, ProcessingJob, ProcessingJobStatus
+from app.config import get_settings
+from app.models import ChatMessage, ChatSession, Document, DocumentStatus, ProcessingJob, ProcessingJobStatus
 from app.schemas.metrics import (
     ChatMetrics,
     DocumentMetricsResponse,
+    ProcessingHistoryResponse,
+    ProcessingJobRecord,
     ProcessingMetricsResponse,
     StageMetrics,
+    StorageMetricsResponse,
     SystemMetricsResponse,
 )
 from app.services.api_latency import get_api_latency_stats
@@ -83,6 +88,57 @@ async def get_processing_metrics(db: AsyncSession) -> ProcessingMetricsResponse:
         avg_duration_ms=round(avg_duration, 2) if avg_duration else None,
         failure_rate=failure_rate,
         by_stage=sorted(stage_map.values(), key=lambda item: item.stage),
+    )
+
+
+async def get_storage_metrics(db: AsyncSession) -> StorageMetricsResponse:
+    settings = get_settings()
+
+    total_file_bytes = await db.scalar(
+        select(func.coalesce(func.sum(Document.file_size_bytes), 0))
+    )
+    total_chunks = await db.scalar(select(func.coalesce(func.sum(Document.chunk_count), 0)))
+    total_chat_sessions = await db.scalar(select(func.count()).select_from(ChatSession))
+    total_chat_messages = await db.scalar(select(func.count()).select_from(ChatMessage))
+
+    filesystem_bytes: int | None = None
+    upload_dir = Path(settings.upload_dir)
+    if upload_dir.is_dir():
+        filesystem_bytes = sum(
+            file.stat().st_size for file in upload_dir.rglob("*") if file.is_file()
+        )
+
+    return StorageMetricsResponse(
+        total_file_bytes=int(total_file_bytes or 0),
+        filesystem_bytes=filesystem_bytes,
+        total_chunks=int(total_chunks or 0),
+        total_chat_sessions=int(total_chat_sessions or 0),
+        total_chat_messages=int(total_chat_messages or 0),
+        embedding_dimension=settings.embedding_dimension,
+    )
+
+
+async def get_processing_history(
+    db: AsyncSession, *, limit: int = 50, offset: int = 0
+) -> ProcessingHistoryResponse:
+    total = await db.scalar(select(func.count()).select_from(ProcessingJob)) or 0
+
+    result = await db.execute(
+        select(ProcessingJob)
+        .order_by(ProcessingJob.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    items = [
+        ProcessingJobRecord.model_validate(job)
+        for job in result.scalars().all()
+    ]
+
+    return ProcessingHistoryResponse(
+        items=items,
+        total=int(total),
+        limit=limit,
+        offset=offset,
     )
 
 

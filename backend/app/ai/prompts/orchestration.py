@@ -1,33 +1,25 @@
 """
 Prompt orchestration — composes atomic prompt modules into final prompts.
-
-This is the ONLY module that assembles prompts for the LLM. Other modules
-define building blocks; this module wires them together. All external code
-should import from here (via the package __init__).
-
-Architecture:
-  system.py        →  identity + security + tone        (WHO)
-  grounding.py     →  citation + anti-hallucination     (RULES)
-  conversation.py  →  dialogue flow + greeting          (HOW)
-  generation.py    →  task-specific templates            (WHAT)
-  orchestration.py →  assembly + context formatting      (COMPOSE)
 """
 
 from app.ai.prompts.system import IDENTITY, SECURITY_RULES, TONE
 from app.ai.prompts.grounding import GROUNDING_RULES, NO_CONTEXT_HANDLING
 from app.ai.prompts.conversation import GREETING, DIALOGUE_FLOW
 from app.ai.prompts.generation import (
-    SUMMARY_SYSTEM,
-    SUMMARY_USER,
+    COMPARISON_SYSTEM,
+    COMPARISON_USER,
+    DOCUMENT_ANALYSIS_SYSTEM,
+    DOCUMENT_ANALYSIS_USER,
     FOLLOWUP_SYSTEM,
     FOLLOWUP_USER,
+    LENGTH_INSTRUCTIONS,
+    SUMMARY_CUSTOM_SYSTEM,
+    SUMMARY_CUSTOM_USER,
+    TONE_INSTRUCTIONS,
     CONTEXTUALIZE_SYSTEM,
     CHAT_USER,
     RAG_GROUNDING_SUFFIX,
 )
-
-
-# ── Composed system prompt (identity + grounding + conversation + security) ──
 
 _CHAT_SYSTEM_PROMPT = "\n\n".join([
     IDENTITY,
@@ -41,21 +33,15 @@ _CHAT_SYSTEM_PROMPT = "\n\n".join([
 
 
 def get_chat_system_prompt() -> str:
-    """Return the fully assembled chat system prompt."""
     return _CHAT_SYSTEM_PROMPT
 
 
 def get_contextualize_prompt() -> str:
-    """Return the query-rewriting system prompt for multi-turn conversations."""
     return CONTEXTUALIZE_SYSTEM
 
 
 def get_grounding_suffix() -> str:
-    """Return the RAG grounding suffix appended to the LangChain chain."""
     return RAG_GROUNDING_SUFFIX
-
-
-# ── Builders (context formatting + assembly) ────────────────────────
 
 
 def build_chat_prompt(
@@ -63,7 +49,6 @@ def build_chat_prompt(
     context_blocks: list[str],
     history_blocks: list[str],
 ) -> tuple[str, str]:
-    """Assemble a (system, user) prompt pair for a chat turn."""
     context = (
         "\n\n".join(context_blocks)
         if context_blocks
@@ -77,12 +62,61 @@ def build_chat_prompt(
     )
 
 
-def build_followup_prompt(question: str, answer: str) -> tuple[str, str]:
-    """Assemble a (system, user) prompt pair for follow-up suggestions."""
-    return FOLLOWUP_SYSTEM, FOLLOWUP_USER.format(question=question, answer=answer)
+def build_followup_prompt(
+    question: str,
+    answer: str,
+    *,
+    document_context: str = "No document metadata available.",
+    citation_context: str = "No citations in the last answer.",
+) -> tuple[str, str]:
+    return FOLLOWUP_SYSTEM, FOLLOWUP_USER.format(
+        question=question,
+        answer=answer,
+        document_context=document_context,
+        citation_context=citation_context,
+    )
 
 
 def build_summary_prompt(text: str, max_chars: int = 12000) -> tuple[str, str]:
-    """Assemble a (system, user) prompt pair for document summarization."""
     excerpt = text[:max_chars]
-    return SUMMARY_SYSTEM, SUMMARY_USER.format(text=excerpt)
+    return DOCUMENT_ANALYSIS_SYSTEM, DOCUMENT_ANALYSIS_USER.format(text=excerpt)
+
+
+def build_custom_summary_prompt(
+    text: str,
+    *,
+    length: str = "standard",
+    tone: str = "professional",
+    focus_areas: list[str] | None = None,
+    max_chars: int = 12000,
+) -> tuple[str, str]:
+    excerpt = text[:max_chars]
+    focus_instruction = (
+        ", ".join(focus_areas)
+        if focus_areas
+        else "General overview — no specific focus requested."
+    )
+    return SUMMARY_CUSTOM_SYSTEM, SUMMARY_CUSTOM_USER.format(
+        text=excerpt,
+        length_instruction=LENGTH_INSTRUCTIONS.get(length, LENGTH_INSTRUCTIONS["standard"]),
+        tone_instruction=TONE_INSTRUCTIONS.get(tone, TONE_INSTRUCTIONS["professional"]),
+        focus_instruction=focus_instruction,
+    )
+
+
+def build_comparison_prompt(
+    document_blocks: list[tuple[str, str]],
+    *,
+    focus: str | None = None,
+) -> tuple[str, str]:
+    blocks = "\n\n".join(
+        f"--- {label} ---\n{content[:8000]}" for label, content in document_blocks
+    )
+    labels = [label for label, _ in document_blocks]
+    label_list = ", ".join(labels)
+    focus_clause = f" with focus on: {focus}" if focus else ""
+    return COMPARISON_SYSTEM, COMPARISON_USER.format(
+        focus_clause=focus_clause,
+        document_blocks=blocks,
+        label_list=label_list,
+    )

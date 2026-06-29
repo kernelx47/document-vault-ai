@@ -12,15 +12,22 @@ from app.schemas.document import (
     DocumentStatusResponse,
     DocumentUploadBatchResponse,
     DocumentUploadResponse,
+    DocumentVersionListResponse,
 )
 from app.schemas.openapi_responses import (
     CHAT_SESSION_RESPONSES,
     DOCUMENT_INSIGHTS_RESPONSES,
     DOCUMENT_READ_RESPONSES,
+    RESPONSE_422,
     UPLOAD_RESPONSES,
     merge_responses,
 )
-from app.services import chat_service, document_service
+from app.schemas.document_analysis import (
+    DocumentCompareRequest,
+    DocumentCompareResponse,
+    InsightsRegenerateRequest,
+)
+from app.services import chat_service, comparison_service, document_service
 from app.services.rate_limit_service import enforce_upload_rate_limit
 
 router = APIRouter()
@@ -87,6 +94,24 @@ async def list_documents(
     return await document_service.list_documents(db, page=page, page_size=page_size)
 
 
+@router.post(
+    "/compare",
+    response_model=DocumentCompareResponse,
+    summary="Compare documents",
+    response_description="Structured comparison across two or more ready documents.",
+    description=(
+        "Generate a structured comparison with similarities, differences, and a comparison table. "
+        "All documents must be in `ready` status."
+    ),
+    responses=merge_responses(DOCUMENT_INSIGHTS_RESPONSES, RESPONSE_422),
+)
+async def compare_documents(
+    payload: DocumentCompareRequest,
+    db: AsyncSession = Depends(get_db),
+) -> DocumentCompareResponse:
+    return await comparison_service.compare_document_set(db, payload)
+
+
 @router.get(
     "/{document_id}",
     response_model=DocumentDetail,
@@ -136,6 +161,60 @@ async def get_document_insights(
     db: AsyncSession = Depends(get_db),
 ) -> DocumentInsightsResponse:
     return await document_service.get_document_insights(db, document_id)
+
+
+@router.post(
+    "/{document_id}/insights/regenerate",
+    response_model=DocumentInsightsResponse,
+    summary="Regenerate document insights",
+    response_description="Customized summary and insights.",
+    description=(
+        "Regenerate summary and insights with customizable length, tone, and focus areas. "
+        "Category, tags, and sentiment from initial ingest are preserved."
+    ),
+    responses=DOCUMENT_INSIGHTS_RESPONSES,
+)
+async def regenerate_document_insights(
+    document_id: UUID,
+    payload: InsightsRegenerateRequest,
+    db: AsyncSession = Depends(get_db),
+) -> DocumentInsightsResponse:
+    return await document_service.regenerate_document_insights(db, document_id, payload)
+
+
+@router.post(
+    "/{document_id}/versions",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=DocumentUploadResponse,
+    summary="Upload a new document version",
+    response_description="New version queued; prior versions remain in history.",
+    description="Upload a replacement file as the next version in the document group.",
+    responses=UPLOAD_RESPONSES,
+)
+async def upload_document_version(
+    request: Request,
+    document_id: UUID,
+    file: UploadFile = File(..., description="PDF or DOCX file for the new version."),
+    db: AsyncSession = Depends(get_db),
+) -> DocumentUploadResponse:
+    client_ip = request.client.host if request.client else "unknown"
+    await enforce_upload_rate_limit(client_ip)
+    return await document_service.create_document_version(db, document_id, file)
+
+
+@router.get(
+    "/{document_id}/versions",
+    response_model=DocumentVersionListResponse,
+    summary="List document versions",
+    response_description="All versions in the document group, newest first.",
+    description="Returns version history for the document's logical group.",
+    responses=DOCUMENT_READ_RESPONSES,
+)
+async def list_document_versions(
+    document_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> DocumentVersionListResponse:
+    return await document_service.list_document_versions(db, document_id)
 
 
 @router.post(

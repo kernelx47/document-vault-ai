@@ -8,6 +8,7 @@ from app.exceptions import (
     unhandled_exception_handler,
     validation_exception_handler,
 )
+from app.middleware.request_id import RequestIdMiddleware
 from app.middleware.request_logging import RequestLoggingMiddleware
 
 
@@ -20,3 +21,4 @@ def register_exception_handlers(app: FastAPI) -> None:
 
 def register_middleware(app: FastAPI) -> None:
     app.add_middleware(RequestLoggingMiddleware)
+    app.add_middleware(RequestIdMiddleware)

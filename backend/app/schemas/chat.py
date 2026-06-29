@@ -93,6 +93,10 @@ class ChatMessageResponse(BaseModel):
         default_factory=list,
         description="Source excerpts supporting the answer.",
     )
+    retrieved_chunk_ids: list[UUID] = Field(
+        default_factory=list,
+        description="Chunk IDs retrieved for RAG context (assistant messages only).",
+    )
     suggested_followups: list[str] = Field(
         default_factory=list,
         description="Optional follow-up questions the user might ask next.",

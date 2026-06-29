@@ -1,11 +1,19 @@
 import logging
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_db
-from app.schemas.metrics import DocumentMetricsResponse, ProcessingMetricsResponse, SystemMetricsResponse
+from app.schemas.metrics import (
+    AIUsageMetricsResponse,
+    DocumentMetricsResponse,
+    ProcessingHistoryResponse,
+    ProcessingMetricsResponse,
+    StorageMetricsResponse,
+    SystemMetricsResponse,
+)
 from app.services import metrics_service
+from app.services.ai_usage_service import get_ai_usage_metrics
 
 router = APIRouter()
 logger = logging.getLogger("app.api.metrics")
@@ -40,6 +48,38 @@ async def processing_metrics(db: AsyncSession = Depends(get_db)) -> ProcessingMe
 
 
 @router.get(
+    "/processing/history",
+    response_model=ProcessingHistoryResponse,
+    summary="Processing job history",
+    response_description="Paginated list of processing job records.",
+    description=(
+        "Recent processing job records with stage, status, duration, and errors. "
+        "Use for debugging failed ingestions and auditing pipeline runs."
+    ),
+)
+async def processing_history(
+    limit: int = Query(default=50, ge=1, le=200, description="Maximum records to return."),
+    offset: int = Query(default=0, ge=0, description="Pagination offset."),
+    db: AsyncSession = Depends(get_db),
+) -> ProcessingHistoryResponse:
+    return await metrics_service.get_processing_history(db, limit=limit, offset=offset)
+
+
+@router.get(
+    "/storage",
+    response_model=StorageMetricsResponse,
+    summary="Data storage metrics",
+    response_description="File, chunk, and chat storage totals.",
+    description=(
+        "Storage footprint across uploaded files, indexed chunks, and chat data. "
+        "Includes filesystem usage when the upload directory is accessible."
+    ),
+)
+async def storage_metrics(db: AsyncSession = Depends(get_db)) -> StorageMetricsResponse:
+    return await metrics_service.get_storage_metrics(db)
+
+
+@router.get(
     "/system",
     response_model=SystemMetricsResponse,
     summary="System performance metrics",
@@ -51,3 +91,18 @@ async def processing_metrics(db: AsyncSession = Depends(get_db)) -> ProcessingMe
 )
 async def system_metrics(db: AsyncSession = Depends(get_db)) -> SystemMetricsResponse:
     return await metrics_service.get_system_metrics(db)
+
+
+@router.get(
+    "/ai-usage",
+    response_model=AIUsageMetricsResponse,
+    summary="AI API usage and cost metrics",
+    response_description="Token usage, estimated cost, and daily quota status.",
+    description=(
+        "Rolling AI usage snapshot: token counts, estimated API cost by operation and provider, "
+        "and daily request quota consumption."
+    ),
+)
+async def ai_usage_metrics() -> AIUsageMetricsResponse:
+    data = await get_ai_usage_metrics()
+    return AIUsageMetricsResponse(**data)

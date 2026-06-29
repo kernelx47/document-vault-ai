@@ -11,6 +11,8 @@ Organized by concern:
 
 from app.ai.prompts.orchestration import (
     build_chat_prompt,
+    build_comparison_prompt,
+    build_custom_summary_prompt,
     build_followup_prompt,
     build_summary_prompt,
     get_chat_system_prompt,
@@ -20,6 +22,8 @@ from app.ai.prompts.orchestration import (
 
 __all__ = [
     "build_chat_prompt",
+    "build_comparison_prompt",
+    "build_custom_summary_prompt",
     "build_followup_prompt",
     "build_summary_prompt",
     "get_chat_system_prompt",

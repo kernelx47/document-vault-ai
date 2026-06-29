@@ -1,17 +1,25 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import clsx from "clsx";
 import {
   ChatMessage,
+  compareDocuments,
   createChatSession,
+  DocumentCompareResult,
+  DocumentInsights,
   DocumentSummary,
   getChatHistory,
+  getDocumentInsights,
   getDocumentStatus,
   isAbortError,
   listDocuments,
+  regenerateDocumentInsights,
   streamChatMessage,
+  SummaryLength,
+  SummaryTone,
   uploadDocument,
 } from "@/lib/api";
 
@@ -380,6 +388,18 @@ export default function VaultApp() {
   const [queuedCount, setQueuedCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
+  const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
+  const [activeDocId, setActiveDocId] = useState<string | null>(null);
+  const [activeInsights, setActiveInsights] = useState<DocumentInsights | null>(null);
+  const [insightsLoading, setInsightsLoading] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
+  const [summaryLength, setSummaryLength] = useState<SummaryLength>("standard");
+  const [summaryTone, setSummaryTone] = useState<SummaryTone>("professional");
+  const [focusAreas, setFocusAreas] = useState("");
+  const [compareFocus, setCompareFocus] = useState("");
+  const [comparing, setComparing] = useState(false);
+  const [compareResult, setCompareResult] = useState<DocumentCompareResult | null>(null);
+
   const chatEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -411,6 +431,66 @@ export default function VaultApp() {
     const iv = setInterval(() => void refreshDocuments(), 5000);
     return () => clearInterval(iv);
   }, [refreshDocuments]);
+
+  async function loadDocumentInsights(documentId: string) {
+    setActiveDocId(documentId);
+    setInsightsLoading(true);
+    setCompareResult(null);
+    try {
+      setActiveInsights(await getDocumentInsights(documentId));
+    } catch {
+      setActiveInsights(null);
+    } finally {
+      setInsightsLoading(false);
+    }
+  }
+
+  function toggleDocSelection(documentId: string) {
+    setSelectedDocIds((prev) =>
+      prev.includes(documentId)
+        ? prev.filter((id) => id !== documentId)
+        : [...prev, documentId],
+    );
+  }
+
+  async function handleRegenerateInsights() {
+    if (!activeDocId) return;
+    setRegenerating(true);
+    setError(null);
+    try {
+      const focus = focusAreas
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+      setActiveInsights(
+        await regenerateDocumentInsights(activeDocId, {
+          length: summaryLength,
+          tone: summaryTone,
+          focus_areas: focus,
+        }),
+      );
+      await refreshDocuments();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to regenerate insights");
+    } finally {
+      setRegenerating(false);
+    }
+  }
+
+  async function handleCompareDocuments() {
+    if (selectedDocIds.length < 2) return;
+    setComparing(true);
+    setError(null);
+    try {
+      setCompareResult(
+        await compareDocuments(selectedDocIds, compareFocus.trim() || undefined),
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Comparison failed");
+    } finally {
+      setComparing(false);
+    }
+  }
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -801,7 +881,7 @@ export default function VaultApp() {
           </nav>
 
           {/* Bottom */}
-          <div className="border-t border-[var(--lavender-mist)] px-3 py-3">
+          <div className="space-y-0.5 border-t border-[var(--lavender-mist)] px-3 py-3">
             <button
               onClick={() => setShowUploadModal(true)}
               className="flex w-full items-center gap-2 rounded-[var(--radius)] px-3 py-2 text-[14px] text-[var(--heather)] transition-colors hover:bg-[var(--iris-haze)]"
@@ -814,6 +894,16 @@ export default function VaultApp() {
                 </span>
               )}
             </button>
+            <Link
+              href="/platform"
+              className="flex w-full items-center gap-2 rounded-[var(--radius)] px-3 py-2 text-[14px] text-[var(--heather)] transition-colors hover:bg-[var(--iris-haze)] hover:text-[var(--deep-ink)]"
+            >
+              <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 3v18h18" />
+                <path d="M7 14l4-4 4 4 5-6" />
+              </svg>
+              <span className="flex-1 text-left">Platform metrics</span>
+            </Link>
           </div>
         </div>
       </aside>
@@ -982,19 +1072,182 @@ export default function VaultApp() {
               {/* Existing documents */}
               {documents.length > 0 && (
                 <div className="mt-4 border-t border-[var(--lavender-mist)] pt-3">
-                  <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--mist)]">Uploaded documents</p>
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--mist)]">
+                      Uploaded documents
+                    </p>
+                    {selectedDocIds.length >= 2 && (
+                      <button
+                        onClick={() => void handleCompareDocuments()}
+                        disabled={comparing}
+                        className="rounded-full bg-[var(--electric-violet)] px-3 py-1 text-[11px] font-medium text-white disabled:opacity-60"
+                      >
+                        {comparing ? "Comparing…" : `Compare ${selectedDocIds.length}`}
+                      </button>
+                    )}
+                  </div>
+                  {selectedDocIds.length >= 2 && (
+                    <input
+                      value={compareFocus}
+                      onChange={(e) => setCompareFocus(e.target.value)}
+                      placeholder="Comparison focus (optional): e.g. coverage limits"
+                      className="mb-2 w-full rounded-[var(--radius)] border border-[var(--lavender-mist)] px-3 py-2 text-xs text-[var(--deep-ink)]"
+                    />
+                  )}
                   <div className="max-h-48 space-y-1 overflow-y-auto">
                     {documents.map((doc) => (
-                      <div key={doc.id} className="flex items-center gap-2.5 rounded-[var(--radius)] px-3 py-2 hover:bg-[var(--iris-haze)]">
-                        <IconFile className="shrink-0 text-[var(--mist)]" />
-                        <span className="flex-1 truncate text-sm text-[var(--deep-ink)]">{doc.filename}</span>
+                      <div
+                        key={doc.id}
+                        className={clsx(
+                          "flex items-center gap-2.5 rounded-[var(--radius)] px-3 py-2 hover:bg-[var(--iris-haze)]",
+                          activeDocId === doc.id && "bg-[var(--iris-haze)]",
+                        )}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedDocIds.includes(doc.id)}
+                          disabled={doc.status !== "ready"}
+                          onChange={() => toggleDocSelection(doc.id)}
+                          className="shrink-0 accent-[var(--electric-violet)]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => doc.status === "ready" && void loadDocumentInsights(doc.id)}
+                          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                        >
+                          <IconFile className="shrink-0 text-[var(--mist)]" />
+                          <div className="min-w-0 flex-1">
+                            <span className="block truncate text-sm text-[var(--deep-ink)]">{doc.filename}</span>
+                            {doc.category && (
+                              <span className="text-[11px] text-[var(--overcast)]">{doc.category}</span>
+                            )}
+                          </div>
+                        </button>
                         <span className={clsx("text-xs", doc.status === "ready" ? "text-[var(--success)]" : doc.status === "processing" ? "text-[var(--warning)]" : doc.status === "failed" ? "text-[var(--danger)]" : "text-[var(--overcast)]")}>
                           {doc.status === "ready" ? "Ready" : doc.status === "processing" ? "Processing" : doc.status === "failed" ? "Failed" : "Uploaded"}
                         </span>
-                        <span className="text-xs text-[var(--overcast)]">{formatFileSize(doc.file_size_bytes)}</span>
                       </div>
                     ))}
                   </div>
+
+                  {insightsLoading && (
+                    <p className="mt-3 text-xs text-[var(--overcast)]">Loading insights…</p>
+                  )}
+
+                  {activeInsights && !insightsLoading && (
+                    <div className="mt-3 rounded-[var(--radius-lg)] border border-[var(--lavender-mist)] bg-[var(--iris-haze)]/40 p-3">
+                      <div className="mb-2 flex flex-wrap items-center gap-2">
+                        {activeInsights.category && (
+                          <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-[var(--electric-violet)]">
+                            {activeInsights.category}
+                          </span>
+                        )}
+                        {activeInsights.sentiment && (
+                          <span className="rounded-full bg-white px-2 py-0.5 text-[11px] text-[var(--heather)]">
+                            {activeInsights.sentiment}
+                          </span>
+                        )}
+                        {activeInsights.tags?.map((tag) => (
+                          <span key={tag} className="rounded-full border border-[var(--lavender-mist)] px-2 py-0.5 text-[11px] text-[var(--overcast)]">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                      {activeInsights.summary && (
+                        <p className="text-sm leading-relaxed text-[var(--deep-ink)]">{activeInsights.summary}</p>
+                      )}
+                      {activeInsights.insights.length > 0 && (
+                        <ul className="mt-2 space-y-1 text-xs text-[var(--heather)]">
+                          {activeInsights.insights.map((item) => (
+                            <li key={item}>• {item}</li>
+                          ))}
+                        </ul>
+                      )}
+
+                      <div className="mt-3 border-t border-[var(--lavender-mist)] pt-3">
+                        <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--mist)]">
+                          Customize summary
+                        </p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <select
+                            value={summaryLength}
+                            onChange={(e) => setSummaryLength(e.target.value as SummaryLength)}
+                            className="rounded-[var(--radius)] border border-[var(--lavender-mist)] px-2 py-1.5 text-xs"
+                          >
+                            <option value="brief">Brief</option>
+                            <option value="standard">Standard</option>
+                            <option value="detailed">Detailed</option>
+                          </select>
+                          <select
+                            value={summaryTone}
+                            onChange={(e) => setSummaryTone(e.target.value as SummaryTone)}
+                            className="rounded-[var(--radius)] border border-[var(--lavender-mist)] px-2 py-1.5 text-xs"
+                          >
+                            <option value="neutral">Neutral</option>
+                            <option value="professional">Professional</option>
+                            <option value="executive">Executive</option>
+                            <option value="plain">Plain language</option>
+                          </select>
+                        </div>
+                        <input
+                          value={focusAreas}
+                          onChange={(e) => setFocusAreas(e.target.value)}
+                          placeholder="Focus areas (comma-separated)"
+                          className="mt-2 w-full rounded-[var(--radius)] border border-[var(--lavender-mist)] px-2 py-1.5 text-xs"
+                        />
+                        <button
+                          onClick={() => void handleRegenerateInsights()}
+                          disabled={regenerating}
+                          className="mt-2 rounded-full border border-[var(--electric-violet)] px-3 py-1 text-xs font-medium text-[var(--electric-violet)] disabled:opacity-60"
+                        >
+                          {regenerating ? "Regenerating…" : "Regenerate insights"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {compareResult && (
+                    <div className="mt-3 rounded-[var(--radius-lg)] border border-[var(--lavender-mist)] p-3">
+                      <p className="mb-2 text-sm font-medium text-[var(--deep-ink)]">Comparison</p>
+                      <p className="text-sm text-[var(--heather)]">{compareResult.summary}</p>
+                      {compareResult.differences.length > 0 && (
+                        <ul className="mt-2 space-y-1 text-xs text-[var(--heather)]">
+                          {compareResult.differences.map((item) => (
+                            <li key={item}>• {item}</li>
+                          ))}
+                        </ul>
+                      )}
+                      {compareResult.comparison_table.length > 0 && (
+                        <div className="mt-3 overflow-x-auto">
+                          <table className="w-full text-left text-xs">
+                            <thead>
+                              <tr className="border-b border-[var(--lavender-mist)]">
+                                <th className="py-1 pr-2 font-medium text-[var(--overcast)]">Aspect</th>
+                                {Object.entries(compareResult.document_filenames).map(([id, name]) => (
+                                  <th key={id} className="py-1 pr-2 font-medium text-[var(--overcast)]">{name}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {compareResult.comparison_table.map((row) => (
+                                <tr key={row.aspect} className="border-b border-[var(--lavender-mist)]/60">
+                                  <td className="py-1.5 pr-2 font-medium text-[var(--deep-ink)]">{row.aspect}</td>
+                                  {Object.keys(compareResult.document_filenames).map((id) => (
+                                    <td key={id} className="py-1.5 pr-2 text-[var(--heather)]">
+                                      {row.values[id] ?? "—"}
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                      {compareResult.recommendation && (
+                        <p className="mt-2 text-xs text-[var(--electric-violet)]">{compareResult.recommendation}</p>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

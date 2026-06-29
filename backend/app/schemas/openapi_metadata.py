@@ -9,7 +9,7 @@ Upload PDF or DOCX documents, wait for async processing, then chat with your doc
 2. **Poll status** — `GET /documents/{id}/status` until `status` is `ready` (or `failed`).
 3. **Insights** — `GET /documents/{id}/insights` for AI summary and bullet points.
 4. **Chat** — `POST /documents/{id}/chat/sessions`, then `POST /chat/sessions/{id}/messages`.
-5. **Monitor** — `GET /metrics/system`, `GET /metrics/documents`, and `GET /health` for operational visibility.
+5. **Monitor** — `GET /metrics/system`, `GET /metrics/documents`, `GET /metrics/storage`, and `GET /health` for operational visibility.
 
 ## Authentication
 

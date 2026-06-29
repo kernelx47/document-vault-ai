@@ -22,10 +22,20 @@ async def db_session():
 
 
 @pytest.fixture(autouse=True)
-def bypass_upload_rate_limit():
-    with patch(
-        "app.api.v1.documents.enforce_upload_rate_limit",
-        new_callable=AsyncMock,
+def bypass_rate_limits():
+    with (
+        patch(
+            "app.api.v1.documents.enforce_upload_rate_limit",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "app.api.v1.chat.enforce_chat_rate_limit",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "app.api.v1.chat.enforce_daily_ai_quota",
+            new_callable=AsyncMock,
+        ),
     ):
         yield
 

@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.enums import DocumentStatus
 from app.schemas.openapi_examples import (
@@ -70,7 +70,19 @@ class DocumentSummary(BaseModel):
     file_size_bytes: int = Field(description="Uploaded file size in bytes.")
     page_count: int | None = Field(default=None, description="Extracted page count, if available.")
     chunk_count: int = Field(default=0, description="Number of text chunks indexed for RAG.")
+    category: str | None = Field(default=None, description="AI-assigned document category.")
+    tags: list[str] = Field(default_factory=list, description="AI-assigned topical tags.")
+    sentiment: str | None = Field(default=None, description="Overall document sentiment.")
+    version_number: int = Field(default=1, description="Version within the document group.")
+    is_latest: bool = Field(default=True, description="Whether this is the current version.")
     created_at: datetime
+
+    @field_validator("tags", mode="before")
+    @classmethod
+    def _normalize_tags(cls, value: object) -> list[str]:
+        if not value:
+            return []
+        return [str(item) for item in value]
 
 
 class DocumentDetail(DocumentSummary):
@@ -79,6 +91,9 @@ class DocumentDetail(DocumentSummary):
         json_schema_extra={"examples": [DOCUMENT_DETAIL_EXAMPLE]},
     )
 
+    document_group_id: UUID | None = Field(
+        default=None, description="Shared ID linking all versions of the same logical document."
+    )
     content_type: str = Field(description="MIME type of the uploaded file.")
     summary: str | None = Field(default=None, description="AI-generated document summary.")
     insights: list[str] | None = Field(default=None, description="AI-generated bullet insights.")
@@ -95,6 +110,12 @@ class DocumentInsightsResponse(BaseModel):
     status: DocumentStatus
     summary: str | None = Field(default=None, description="One-paragraph summary of the document.")
     insights: list[str] = Field(default_factory=list, description="Key facts extracted from the document.")
+    category: str | None = Field(default=None, description="AI-assigned document category.")
+    tags: list[str] = Field(default_factory=list, description="AI-assigned topical tags.")
+    sentiment: str | None = Field(
+        default=None,
+        description="Overall document sentiment: positive, negative, neutral, or mixed.",
+    )
 
 
 class DocumentListResponse(BaseModel):
@@ -104,3 +125,18 @@ class DocumentListResponse(BaseModel):
     total: int = Field(description="Total documents matching the query (across all pages).")
     page: int = Field(description="Current page number (1-based).")
     page_size: int = Field(description="Maximum items per page.")
+
+
+class DocumentVersionSummary(BaseModel):
+    id: UUID
+    filename: str
+    version_number: int
+    is_latest: bool
+    status: DocumentStatus
+    created_at: datetime
+
+
+class DocumentVersionListResponse(BaseModel):
+    document_group_id: UUID
+    items: list[DocumentVersionSummary]
+    total: int

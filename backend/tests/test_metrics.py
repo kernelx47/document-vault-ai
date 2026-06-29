@@ -45,3 +45,26 @@ def test_document_metrics_after_upload(mock_delay, client: TestClient):
     assert payload["total"] >= 1
     assert payload["pending"] >= 1
     assert payload["total_size_bytes"] > 0
+
+
+def test_storage_metrics_empty(client: TestClient):
+    response = client.get("/api/v1/metrics/storage")
+    assert response.status_code == 200
+    payload = response.json()
+    assert set(payload.keys()) >= {
+        "total_file_bytes",
+        "total_chunks",
+        "total_chat_sessions",
+        "total_chat_messages",
+        "embedding_dimension",
+    }
+
+
+def test_processing_history_empty(client: TestClient):
+    response = client.get("/api/v1/metrics/processing/history")
+    assert response.status_code == 200
+    payload = response.json()
+    assert isinstance(payload["items"], list)
+    assert payload["total"] >= 0
+    assert payload["limit"] == 50
+    assert payload["offset"] == 0

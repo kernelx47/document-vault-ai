@@ -3,7 +3,7 @@ import logging
 from collections.abc import AsyncIterator
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,6 +24,7 @@ from app.schemas.openapi_responses import (
     merge_responses,
 )
 from app.services import chat_service
+from app.services.rate_limit_service import enforce_chat_rate_limit, enforce_daily_ai_quota
 
 router = APIRouter()
 logger = logging.getLogger("app.api.chat")
@@ -76,10 +77,14 @@ async def get_chat_session(
     responses=merge_responses(CHAT_MESSAGE_RESPONSES, RESPONSE_422),
 )
 async def send_chat_message(
+    request: Request,
     session_id: UUID,
     payload: ChatMessageRequest,
     db: AsyncSession = Depends(get_db),
 ) -> ChatMessageResponse:
+    client_ip = request.client.host if request.client else "unknown"
+    await enforce_chat_rate_limit(client_ip)
+    await enforce_daily_ai_quota()
     return await chat_service.ask_question(db, session_id, payload)
 
 
@@ -108,10 +113,15 @@ async def send_chat_message(
     ),
 )
 async def stream_chat_message(
+    request: Request,
     session_id: UUID,
     payload: ChatMessageRequest,
     db: AsyncSession = Depends(get_db),
 ) -> StreamingResponse:
+    client_ip = request.client.host if request.client else "unknown"
+    await enforce_chat_rate_limit(client_ip)
+    await enforce_daily_ai_quota()
+
     async def event_stream() -> AsyncIterator[str]:
         try:
             async for token in chat_service.stream_question_answer(db, session_id, payload):

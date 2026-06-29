@@ -94,6 +94,9 @@ DOCUMENT_INSIGHTS_EXAMPLE = {
         "Billing cycle is monthly",
         "Document is a sample contract",
     ],
+    "category": "Contract",
+    "tags": ["renewal", "billing", "service agreement"],
+    "sentiment": "neutral",
 }
 
 CHAT_MESSAGE_EXAMPLE = {
@@ -163,6 +166,32 @@ PROCESSING_METRICS_EXAMPLE = {
         {"stage": "embed", "completed": 10, "failed": 0, "avg_duration_ms": 1200.0},
         {"stage": "extract", "completed": 10, "failed": 0, "avg_duration_ms": 450.0},
     ],
+}
+
+STORAGE_METRICS_EXAMPLE = {
+    "total_file_bytes": 5242880,
+    "filesystem_bytes": 5242880,
+    "total_chunks": 340,
+    "total_chat_sessions": 12,
+    "total_chat_messages": 86,
+    "embedding_dimension": 384,
+}
+
+PROCESSING_HISTORY_EXAMPLE = {
+    "items": [
+        {
+            "id": EXAMPLE_DOC_ID,
+            "document_id": EXAMPLE_DOC_ID,
+            "stage": "embed",
+            "status": "completed",
+            "duration_ms": 1200,
+            "error_message": None,
+            "created_at": "2026-06-23T12:01:00Z",
+        }
+    ],
+    "total": 48,
+    "limit": 50,
+    "offset": 0,
 }
 
 HEALTH_EXAMPLE = {

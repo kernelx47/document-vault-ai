@@ -53,6 +53,8 @@ def test_openapi_endpoints_have_summaries(client: TestClient):
         "/api/v1/chat/sessions/{session_id}/messages/stream",
         "/api/v1/metrics/documents",
         "/api/v1/metrics/processing",
+        "/api/v1/metrics/processing/history",
+        "/api/v1/metrics/storage",
         "/api/v1/metrics/system",
         "/api/v1/health",
     ]

@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session
 from app.ai.chunking import chunk_segments
 from app.ai.embeddings import get_embedding_provider
 from app.ai.extractors import extract_text
-from app.ai.llm import generate_summary_and_insights
+from app.ai.llm import analyze_document
+from app.config import get_settings
 from app.db.sync_session import SessionLocal
 from app.models import Document, DocumentChunk, DocumentStatus, ProcessingJob, ProcessingJobStatus
 
@@ -139,7 +140,20 @@ def _embed_stage(session: Session, document: Document) -> None:
         raise ValueError("Chunk stage did not run before embed stage")
 
     provider = get_embedding_provider()
-    embeddings = provider.embed_texts([chunk.content for chunk in chunks])
+    texts = [chunk.content for chunk in chunks]
+    settings = get_settings()
+    batch_size = max(settings.embedding_batch_size, 1)
+    embeddings: list[list[float]] = []
+    for start in range(0, len(texts), batch_size):
+        batch = texts[start : start + batch_size]
+        embeddings.extend(provider.embed_texts(batch))
+        logger.debug(
+            "Embedded batch %d-%d of %d chunks for document %s",
+            start + 1,
+            min(start + batch_size, len(texts)),
+            len(texts),
+            document.id,
+        )
 
     session.query(DocumentChunk).filter(DocumentChunk.document_id == document.id).delete()
     for chunk, embedding in zip(chunks, embeddings, strict=True):
@@ -165,9 +179,12 @@ def _summarize_stage(session: Session, document: Document) -> None:
         .all()
     )
     combined_text = "\n".join(chunk.content for chunk in chunks)
-    summary, insights = generate_summary_and_insights(combined_text)
-    document.summary = summary
-    document.insights = insights
+    analysis = analyze_document(combined_text)
+    document.summary = analysis.summary
+    document.insights = analysis.insights
+    document.category = analysis.category
+    document.tags = analysis.tags
+    document.sentiment = analysis.sentiment
     session.commit()
 
 

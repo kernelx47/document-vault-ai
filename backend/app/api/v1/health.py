@@ -78,3 +78,22 @@ async def health_check(response: Response) -> HealthResponse:
         worker=worker,  # type: ignore[arg-type]
         status="ok" if is_healthy else "degraded",
     )
+
+
+@router.get(
+    "/health/live",
+    summary="Liveness probe",
+    response_description="Returns 200 when the API process is running.",
+)
+async def liveness_probe() -> dict[str, str]:
+    return {"status": "alive"}
+
+
+@router.get(
+    "/health/ready",
+    response_model=HealthResponse,
+    summary="Readiness probe",
+    response_description="Returns 503 when dependencies are unavailable.",
+)
+async def readiness_probe(response: Response) -> HealthResponse:
+    return await health_check(response)
