@@ -170,7 +170,7 @@ export async function streamChatMessage(
   question: string,
   onToken: (token: string) => void,
   signal?: AbortSignal,
-): Promise<void> {
+): Promise<string | null> {
   const response = await fetch(`${API_BASE}/chat/sessions/${sessionId}/messages/stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -185,6 +185,7 @@ export async function streamChatMessage(
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  let title: string | null = null;
 
   try {
     while (true) {
@@ -197,11 +198,14 @@ export async function streamChatMessage(
         if (!line.startsWith("data: ")) continue;
         const payload = JSON.parse(line.slice(6));
         if (payload.token) onToken(payload.token);
+        if (payload.done && payload.title) title = payload.title;
       }
     }
   } finally {
     reader.releaseLock();
   }
+
+  return title;
 }
 
 export async function getDocumentInsights(documentId: string): Promise<DocumentInsights> {
@@ -243,7 +247,7 @@ export async function getChatHistory(sessionId: string) {
   const response = await fetch(`${API_BASE}/chat/sessions/${sessionId}/messages`, {
     cache: "no-store",
   });
-  return parseJson<{ messages: ChatMessage[] }>(response);
+  return parseJson<{ session_id: string; title: string | null; messages: ChatMessage[] }>(response);
 }
 
 /* ─── Platform metrics ───────────────────────────────────────── */
@@ -365,6 +369,26 @@ export type PlatformMetricsSnapshot = {
   storage: StorageMetrics;
   system: SystemMetrics;
   aiUsage: AIUsageMetrics;
+  timeseries: MetricsTimeseries;
+};
+
+export type AIUsageTimeSeriesPoint = {
+  label: string;
+  requests: number;
+  tokens: number;
+  cost_usd: number;
+};
+
+export type ProcessingTimeSeriesPoint = {
+  label: string;
+  completed: number;
+  failed: number;
+};
+
+export type MetricsTimeseries = {
+  ai_usage: AIUsageTimeSeriesPoint[];
+  api_latency_ms: number[];
+  processing_jobs: ProcessingTimeSeriesPoint[];
 };
 
 async function fetchMetrics<T>(path: string): Promise<T> {
@@ -396,14 +420,19 @@ export async function getAIUsageMetrics(): Promise<AIUsageMetrics> {
   return fetchMetrics("/ai-usage");
 }
 
+export async function getMetricsTimeseries(hours = 24): Promise<MetricsTimeseries> {
+  return fetchMetrics(`/timeseries?hours=${hours}`);
+}
+
 export async function getPlatformMetricsSnapshot(): Promise<PlatformMetricsSnapshot> {
-  const [documents, processing, processingHistory, storage, system, aiUsage] = await Promise.all([
+  const [documents, processing, processingHistory, storage, system, aiUsage, timeseries] = await Promise.all([
     getDocumentMetrics(),
     getProcessingMetrics(),
-    getProcessingHistory(),
+    getProcessingHistory(50),
     getStorageMetrics(),
     getSystemMetrics(),
     getAIUsageMetrics(),
+    getMetricsTimeseries(),
   ]);
-  return { documents, processing, processingHistory, storage, system, aiUsage };
+  return { documents, processing, processingHistory, storage, system, aiUsage, timeseries };
 }

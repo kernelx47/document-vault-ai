@@ -142,6 +142,7 @@ CHAT_HISTORY_EXAMPLE = {
     "session_id": EXAMPLE_SESSION_ID,
     "document_id": EXAMPLE_DOC_ID,
     "document_ids": [EXAMPLE_DOC_ID],
+    "title": "Policy Renewal Date",
     "messages": [CHAT_MESSAGE_EXAMPLE],
 }
 

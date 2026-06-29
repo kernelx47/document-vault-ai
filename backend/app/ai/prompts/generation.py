@@ -90,6 +90,23 @@ Assistant answer: {answer}
 Suggest 3 follow-up questions the user might naturally ask next."""
 
 
+# ── Chat Session Title ──────────────────────────────────────────────
+
+SESSION_TITLE_SYSTEM = """You generate a short sidebar title for a document chat conversation.
+Respond with JSON only: {"title": "..."}
+Rules:
+- Maximum 6 words
+- Capture the main topic of the exchange, not the literal first message
+- No quotes, no trailing punctuation
+- Use title case for important words
+- If the exchange is only a greeting or small talk with no real topic yet, respond with {"title": ""}"""
+
+SESSION_TITLE_USER = """Conversation:
+{conversation}
+
+Generate a concise sidebar title for this chat."""
+
+
 # ── Document Comparison ─────────────────────────────────────────────
 
 COMPARISON_SYSTEM = """You compare multiple documents and return JSON only:

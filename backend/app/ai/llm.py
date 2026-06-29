@@ -6,6 +6,7 @@ from app.ai.prompts import (
     build_comparison_prompt,
     build_custom_summary_prompt,
     build_followup_prompt,
+    build_session_title_prompt,
     build_summary_prompt,
 )
 from app.config import get_settings
@@ -371,6 +372,73 @@ def generate_followup_suggestions(
             return suggestions
 
     return _followup_fallback(question)
+
+
+def generate_session_title(conversation: str) -> str | None:
+    settings = get_settings()
+
+    if settings.llm_provider == "openai" and settings.openai_api_key:
+        title = _session_title_with_openai(conversation)
+        if title is not None:
+            return title
+    if settings.llm_provider == "gemini" and settings.gemini_api_key:
+        title = _session_title_with_gemini(conversation)
+        if title is not None:
+            return title
+
+    return None
+
+
+def _parse_session_title(content: str) -> str | None:
+    try:
+        match = re.search(r"\{.*\}", content, re.DOTALL)
+        payload = json.loads(match.group(0) if match else content)
+        title = str(payload.get("title", "")).strip()
+        return title or None
+    except (json.JSONDecodeError, AttributeError):
+        return None
+
+
+def _session_title_with_openai(conversation: str) -> str | None:
+    from langchain_openai import ChatOpenAI
+
+    settings = get_settings()
+    system_prompt, user_prompt = build_session_title_prompt(conversation)
+    llm = ChatOpenAI(
+        model=settings.openai_model,
+        api_key=settings.openai_api_key,
+        temperature=0.3,
+    )
+    response = llm.invoke(
+        [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+    )
+    content = response.content if isinstance(response.content, str) else str(response.content)
+    _record_llm_usage("session_title", "openai", settings.openai_model, system_prompt + user_prompt, content)
+    return _parse_session_title(content)
+
+
+def _session_title_with_gemini(conversation: str) -> str | None:
+    from langchain_google_genai import ChatGoogleGenerativeAI
+
+    settings = get_settings()
+    system_prompt, user_prompt = build_session_title_prompt(conversation)
+    llm = ChatGoogleGenerativeAI(
+        model="gemini-2.0-flash",
+        google_api_key=settings.gemini_api_key,
+        temperature=0.3,
+    )
+    response = llm.invoke(
+        [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+    )
+    content = response.content if isinstance(response.content, str) else str(response.content)
+    _record_llm_usage("session_title", "gemini", "gemini-2.0-flash", system_prompt + user_prompt, content)
+    return _parse_session_title(content)
 
 
 def _parse_followups(content: str) -> list[str]:

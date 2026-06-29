@@ -126,7 +126,8 @@ async def stream_chat_message(
         try:
             async for token in chat_service.stream_question_answer(db, session_id, payload):
                 yield f"data: {json.dumps({'token': token})}\n\n"
-            yield f"data: {json.dumps({'done': True})}\n\n"
+            session = await chat_service.get_chat_session(db, session_id)
+            yield f"data: {json.dumps({'done': True, 'title': session.title})}\n\n"
         except HTTPException as exc:
             yield f"data: {json.dumps({'error': exc.detail})}\n\n"
         except Exception:

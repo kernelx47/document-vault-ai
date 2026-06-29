@@ -1,4 +1,5 @@
 import logging
+import re
 import time
 import uuid
 from collections.abc import AsyncIterator
@@ -11,7 +12,7 @@ from sqlalchemy.orm import selectinload
 
 from app.ai.guardrails import InputBlockedError, check_input_async, check_output, check_output_async
 from app.ai.langchain_rag import stream_answer as langchain_stream_answer
-from app.ai.llm import generate_followup_suggestions
+from app.ai.llm import generate_followup_suggestions, generate_session_title
 from app.config import get_settings
 from app.models import (
     ChatMessage,
@@ -34,6 +35,12 @@ from app.services.rag_service import finalize_rag_answer, generate_rag_answer, r
 from app.services.rag_metrics import record_chat_request
 
 logger = logging.getLogger("app.chat")
+
+_AUTO_TITLE_PREFIXES = ("Chat with ", "Chat across ")
+_TRIVIAL_GREETING = re.compile(
+    r"^(?:hi|hello|hey|thanks|thank you|ok|okay|yo|good morning|good afternoon|good evening)[\s!.?,]*$",
+    re.IGNORECASE,
+)
 
 
 async def create_chat_session(db: AsyncSession, document_id: uuid.UUID) -> ChatSessionCreateResponse:
@@ -60,10 +67,7 @@ async def create_multi_chat_session(
 
     title = payload.title
     if not title:
-        if len(documents) == 1:
-            title = f"Chat with {primary.filename}"
-        else:
-            title = f"Chat across {len(documents)} documents"
+        title = None
 
     session = ChatSession(document_id=primary.id, title=title)
     db.add(session)
@@ -155,7 +159,7 @@ async def ask_question(
     assistant_message = await _save_assistant_message(
         db, session, answer, citations, chunk_ids, followups
     )
-    session.title = session.title or question[:80]
+    await _maybe_update_session_title(session, history_messages, question, answer)
     await db.commit()
     await db.refresh(assistant_message)
 
@@ -198,7 +202,7 @@ async def stream_question_answer(
         assistant_message = await _save_assistant_message(
             db, session, answer, citations, chunk_ids, followups
         )
-        session.title = session.title or question[:80]
+        await _maybe_update_session_title(session, history_messages, question, answer)
         await db.commit()
         await db.refresh(assistant_message)
         success = True
@@ -227,6 +231,7 @@ async def get_chat_history(db: AsyncSession, session_id: uuid.UUID) -> ChatHisto
         session_id=session.id,
         document_id=session.document_id,
         document_ids=document_ids,
+        title=session.title,
         messages=[_to_message_response(message) for message in messages],
     )
 
@@ -323,6 +328,64 @@ async def _build_followup_context(
         "\n".join(citation_lines) if citation_lines else "No citations in the last answer."
     )
     return document_context, citation_context
+
+
+def _needs_generated_title(title: str | None) -> bool:
+    if not title:
+        return True
+    return title.startswith(_AUTO_TITLE_PREFIXES)
+
+
+def _is_trivial_greeting(text: str) -> bool:
+    return bool(_TRIVIAL_GREETING.match(text.strip()))
+
+
+def _fallback_session_title(question: str) -> str:
+    question = question.strip()
+    if len(question) <= 80:
+        return question
+    return question[:77] + "..."
+
+
+def _format_conversation_for_title(
+    history_messages: list[ChatMessage],
+    question: str,
+    answer: str,
+) -> str:
+    lines: list[str] = []
+    for message in history_messages:
+        role = "User" if message.role == MessageRole.USER else "Assistant"
+        lines.append(f"{role}: {message.content[:500]}")
+    lines.append(f"User: {question[:500]}")
+    lines.append(f"Assistant: {answer[:500]}")
+    return "\n".join(lines)
+
+
+async def _maybe_update_session_title(
+    session: ChatSession,
+    history_messages: list[ChatMessage],
+    question: str,
+    answer: str,
+) -> None:
+    if not _needs_generated_title(session.title):
+        return
+
+    prior_user_messages = [message.content for message in history_messages if message.role == MessageRole.USER]
+    all_user_messages = prior_user_messages + [question]
+    if len(all_user_messages) == 1 and _is_trivial_greeting(all_user_messages[0]):
+        return
+
+    conversation = _format_conversation_for_title(history_messages, question, answer)
+    title: str | None = None
+    try:
+        title = generate_session_title(conversation)
+    except Exception:
+        logger.debug("Session title generation failed", exc_info=True)
+
+    if not title:
+        title = _fallback_session_title(question)
+
+    session.title = title[:512]
 
 
 async def _get_ready_documents(db: AsyncSession, document_ids: list[uuid.UUID]) -> list[Document]:

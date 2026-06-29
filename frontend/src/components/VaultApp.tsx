@@ -600,7 +600,7 @@ export default function VaultApp() {
       const s: LocalSession = {
         id: crypto.randomUUID(),
         serverSessionId: null,
-        title: q.slice(0, 50) + (q.length > 50 ? "…" : ""),
+        title: "New chat",
         messages: [],
         createdAt: Date.now(),
       };
@@ -634,7 +634,6 @@ export default function VaultApp() {
     setSessions((p) => p.map((s) => s.id === sid ? {
       ...s,
       messages: [...s.messages, userMsg, aiMsg],
-      title: s.messages.length === 0 ? q.slice(0, 50) + (q.length > 50 ? "…" : "") : s.title,
     } : s));
 
     let serverSid = current.serverSessionId;
@@ -657,7 +656,7 @@ export default function VaultApp() {
       if (cancelledRef.current) return;
 
       let gotTokens = false;
-      await streamChatMessage(serverSid!, q, (token) => {
+      const generatedTitle = await streamChatMessage(serverSid!, q, (token) => {
         gotTokens = true;
         setSessions((p) => p.map((s) => s.id === sid ? {
           ...s,
@@ -666,6 +665,10 @@ export default function VaultApp() {
       }, ac.signal);
 
       if (cancelledRef.current) return;
+
+      if (generatedTitle) {
+        setSessions((p) => p.map((s) => (s.id === sid ? { ...s, title: generatedTitle } : s)));
+      }
 
       if (!gotTokens) {
         setSessions((p) => p.map((s) => s.id === sid ? {
@@ -680,7 +683,11 @@ export default function VaultApp() {
         try {
           const h = await getChatHistory(serverSid!);
           if (h.messages.length > 0) {
-            setSessions((p) => p.map((s) => (s.id === sid ? { ...s, messages: h.messages } : s)));
+            setSessions((p) => p.map((s) => (s.id === sid ? {
+              ...s,
+              messages: h.messages,
+              title: h.title ?? s.title,
+            } : s)));
           }
         } catch { /* keep local */ }
       }

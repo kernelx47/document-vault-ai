@@ -12,6 +12,8 @@ from app.ai.prompts.generation import (
     DOCUMENT_ANALYSIS_USER,
     FOLLOWUP_SYSTEM,
     FOLLOWUP_USER,
+    SESSION_TITLE_SYSTEM,
+    SESSION_TITLE_USER,
     LENGTH_INSTRUCTIONS,
     SUMMARY_CUSTOM_SYSTEM,
     SUMMARY_CUSTOM_USER,
@@ -75,6 +77,10 @@ def build_followup_prompt(
         document_context=document_context,
         citation_context=citation_context,
     )
+
+
+def build_session_title_prompt(conversation: str) -> tuple[str, str]:
+    return SESSION_TITLE_SYSTEM, SESSION_TITLE_USER.format(conversation=conversation)
 
 
 def build_summary_prompt(text: str, max_chars: int = 12000) -> tuple[str, str]:

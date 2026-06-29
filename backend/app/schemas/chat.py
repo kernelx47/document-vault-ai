@@ -110,4 +110,5 @@ class ChatHistoryResponse(BaseModel):
     session_id: UUID
     document_id: UUID
     document_ids: list[UUID] = Field(default_factory=list)
+    title: str | None = Field(default=None, description="Sidebar title for the session.")
     messages: list[ChatMessageResponse] = Field(description="Messages in chronological order.")
