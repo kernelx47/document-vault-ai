@@ -48,12 +48,36 @@ def test_conversation_buffer_window_memory():
     assert buffered[-1].content == "Message 5"
 
 
-def test_build_history_aware_rag_chain_returns_none_without_llm():
+@pytest.mark.asyncio
+async def test_contextualize_question_returns_original_without_history():
+    from app.ai.langchain_rag import contextualize_question
+
+    result = await contextualize_question("When is renewal?", [])
+    assert result == "When is renewal?"
+
+
+def test_contextualize_question_returns_original_without_llm():
     from unittest.mock import patch
 
-    from app.ai.langchain_rag import build_history_aware_rag_chain
+    from app.ai.langchain_rag import contextualize_question
+    import asyncio
+
+    messages = [
+        ChatMessage(
+            id=uuid.uuid4(),
+            session_id=uuid.uuid4(),
+            role=MessageRole.USER,
+            content="When is the renewal date?",
+        ),
+        ChatMessage(
+            id=uuid.uuid4(),
+            session_id=uuid.uuid4(),
+            role=MessageRole.ASSISTANT,
+            content="December 2025.",
+        ),
+    ]
 
     with patch("app.ai.langchain_rag.get_chat_llm", return_value=None):
-        chain = build_history_aware_rag_chain(db=None, document_ids=[])
+        result = asyncio.run(contextualize_question("What about billing?", messages))
 
-    assert chain is None
+    assert result == "What about billing?"
