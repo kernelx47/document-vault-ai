@@ -2,13 +2,124 @@
 @tailwind components;
 @tailwind utilities;
 
+@import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@500&family=Inter:wght@300;400;500;600&display=swap');
+
 :root {
-  --background: #0f172a;
-  --foreground: #f8fafc;
+  --electric-violet: #7c3aed;
+  --deep-ink: #281950;
+  --heather: #5e537c;
+  --mist: #a39ac1;
+  --midnight-plum: #191034;
+  --slate-dusk: #202237;
+  --overcast: #676b89;
+  --pure-paper: #ffffff;
+  --lavender-mist: #e7e6f4;
+  --iris-haze: #f1f2f9;
+
+  --surface-sidebar: #f1f2f9;
+  --surface-main: #ffffff;
+  --surface-hover: #e7e6f4;
+  --surface-user-msg: #f1f2f9;
+  --surface-filled: #7c3aed;
+
+  --radius: 10px;
+  --radius-lg: 16px;
+  --radius-pill: 9999px;
+
+  --danger: #ef4444;
+  --danger-bg: #fef2f2;
+  --success: #16a34a;
+  --warning: #ca8a04;
 }
 
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--lavender-mist) transparent;
+}
+
+*::-webkit-scrollbar { width: 6px; height: 6px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: var(--lavender-mist); border-radius: 3px; }
+
 body {
-  color: var(--foreground);
-  background: var(--background);
+  color: var(--heather);
+  background: var(--iris-haze);
   min-height: 100vh;
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-weight: 400;
+  letter-spacing: 0.025em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+::selection {
+  background: var(--lavender-mist);
+  color: var(--deep-ink);
+}
+
+@keyframes typing-dot-bounce {
+  0%, 80%, 100% {
+    transform: translateY(0);
+    opacity: 0.45;
+  }
+  40% {
+    transform: translateY(-6px);
+    opacity: 1;
+  }
+}
+
+.typing-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 12px 16px;
+  border-radius: 16px;
+  background: var(--pure-paper);
+  border: 1px solid var(--lavender-mist);
+  box-shadow: 0 1px 2px rgb(40 25 80 / 6%);
+}
+
+.typing-indicator span {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  animation: typing-dot-bounce 1.2s ease-in-out infinite;
+}
+
+.typing-indicator span:nth-child(1) {
+  background-color: var(--deep-ink);
+}
+
+.typing-indicator span:nth-child(2) {
+  background-color: var(--electric-violet);
+  animation-delay: 0.15s;
+}
+
+.typing-indicator span:nth-child(3) {
+  background-color: var(--heather);
+  animation-delay: 0.3s;
+}
+
+.citation-chip.cite-highlight {
+  box-shadow: 0 0 0 2px var(--electric-violet);
+  background-color: var(--iris-haze);
+}
+
+.inline-source-citation {
+  display: inline;
+  margin: 0 1px;
+  border-radius: 4px;
+  padding: 0 2px;
+  font-weight: 500;
+  color: var(--electric-violet);
+  text-decoration: underline;
+  text-decoration-color: var(--lavender-mist);
+  text-underline-offset: 2px;
+  vertical-align: baseline;
+}
+
+.inline-source-citation:hover {
+  background-color: var(--iris-haze);
 }

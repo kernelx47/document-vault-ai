@@ -1,286 +1,1012 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import ReactMarkdown, { type Components } from "react-markdown";
+import clsx from "clsx";
 import {
   ChatMessage,
   createChatSession,
   DocumentSummary,
   getChatHistory,
   getDocumentStatus,
+  isAbortError,
   listDocuments,
-  sendChatMessage,
   streamChatMessage,
   uploadDocument,
 } from "@/lib/api";
 
+/* ─── Icons (1.5px stroke, violet family) ────────────────────── */
+
+function IconSidebar({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M9 3v18" />
+    </svg>
+  );
+}
+
+function IconNewChat({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+    </svg>
+  );
+}
+
+function IconSend({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" />
+    </svg>
+  );
+}
+
+function IconPlus({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  );
+}
+
+function IconX({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+      <path d="M18 6L6 18M6 6l12 12" />
+    </svg>
+  );
+}
+
+function IconTrash({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z" />
+    </svg>
+  );
+}
+
+function IconFile({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+    </svg>
+  );
+}
+
+function IconCheck({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
+function IconStop({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+      <rect x="6" y="6" width="12" height="12" rx="1.5" />
+    </svg>
+  );
+}
+
+function IconLoader({ className }: { className?: string }) {
+  return (
+    <svg className={clsx("animate-spin", className)} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <path d="M21 12a9 9 0 11-6.219-8.56" />
+    </svg>
+  );
+}
+
+function IconUpload({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" />
+    </svg>
+  );
+}
+
+function AiAvatar() {
+  return (
+    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--electric-violet)]">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5">
+        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+      </svg>
+    </div>
+  );
+}
+
+const THINKING_STAGES = [
+  { text: "Searching documents", icon: "🔍" },
+  { text: "Finding relevant passages", icon: "📄" },
+  { text: "Cross-referencing sources", icon: "🔗" },
+  { text: "Analyzing context", icon: "🧠" },
+  { text: "Crafting response", icon: "✍️" },
+  { text: "Double-checking citations", icon: "✅" },
+] as const;
+
+const DOT_COLORS = [
+  "var(--electric-violet)",
+  "#8b5cf6",
+  "#a78bfa",
+] as const;
+
+function useThinkingStage(active: boolean) {
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    if (!active) { setIndex(0); return; }
+    const id = window.setInterval(
+      () => setIndex((i) => (i + 1) % THINKING_STAGES.length),
+      2400,
+    );
+    return () => window.clearInterval(id);
+  }, [active]);
+
+  return THINKING_STAGES[index];
+}
+
+function DancingDots({ size = 6 }: { size?: number }) {
+  return (
+    <>
+      <style>{`@keyframes vault-dot-dance{0%,100%{transform:translateY(0) scale(1);opacity:.4}50%{transform:translateY(-5px) scale(1.15);opacity:1}}`}</style>
+      <span className="inline-flex items-center gap-[3px]">
+        {DOT_COLORS.map((color, i) => (
+          <span
+            key={i}
+            style={{
+              width: size,
+              height: size,
+              borderRadius: "50%",
+              backgroundColor: color,
+              display: "inline-block",
+              animation: "vault-dot-dance 1.2s ease-in-out infinite",
+              animationDelay: `${i * 0.15}s`,
+            }}
+          />
+        ))}
+      </span>
+    </>
+  );
+}
+
+function ThinkingIndicator() {
+  const stage = useThinkingStage(true);
+  return (
+    <div className="flex items-start gap-3 mb-6">
+      <div className="mt-1"><AiAvatar /></div>
+      <div className="pt-1">
+        <div className="flex items-center gap-2.5 rounded-2xl bg-[var(--iris-haze)] px-4 py-2.5">
+          <span className="text-sm">{stage.icon}</span>
+          <span className="text-[14px] font-medium text-[var(--heather)]">{stage.text}</span>
+          <DancingDots size={5} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InlineThinkingBar() {
+  const stage = useThinkingStage(true);
+  return (
+    <div className="flex items-center gap-2 text-[13px] text-[var(--heather)]">
+      <span>{stage.icon}</span>
+      <span className="font-medium">{stage.text}</span>
+      <DancingDots size={4} />
+    </div>
+  );
+}
+
+function isAssistantPending(msg: UiMessage) {
+  return msg.role === "assistant" && msg.streaming === true && msg.content.trim().length === 0;
+}
+
+function citationAnchorId(messageId: string, sourceIndex: number) {
+  return `cite-${messageId}-${sourceIndex}`;
+}
+
+function linkifySourceCitations(content: string, messageId: string) {
+  return content.replace(/\[Source\s+(\d+)\]/gi, (_match, index: string) => {
+    return `[Source ${index}](#${citationAnchorId(messageId, Number(index))})`;
+  });
+}
+
+function highlightCitation(anchorId: string) {
+  const chip = document.getElementById(anchorId);
+  if (!chip) return;
+  chip.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  chip.classList.add("cite-highlight");
+  window.setTimeout(() => chip.classList.remove("cite-highlight"), 1800);
+}
+
+function AssistantMessageBody({
+  messageId,
+  content,
+  citations,
+  streaming = false,
+}: {
+  messageId: string;
+  content: string;
+  citations: ChatMessage["citations"];
+  streaming?: boolean;
+}) {
+  const [expandedSource, setExpandedSource] = useState<number | null>(null);
+  const linkedContent = useMemo(() => linkifySourceCitations(content, messageId), [content, messageId]);
+
+  const openCitation = useCallback((sourceIndex: number) => {
+    setExpandedSource(sourceIndex);
+    highlightCitation(citationAnchorId(messageId, sourceIndex));
+  }, [messageId]);
+
+  const markdownComponents = useMemo<Components>(() => ({
+    a: ({ href, children, ...props }) => {
+      if (href?.startsWith(`#cite-${messageId}-`)) {
+        const sourceIndex = Number(href.slice(href.lastIndexOf("-") + 1));
+        return (
+          <button
+            type="button"
+            className="inline-source-citation"
+            onClick={() => openCitation(sourceIndex)}
+          >
+            {children}
+          </button>
+        );
+      }
+      return (
+        <a href={href} {...props} target="_blank" rel="noopener noreferrer">
+          {children}
+        </a>
+      );
+    },
+  }), [messageId, openCitation]);
+
+  const expandedCitation = expandedSource != null
+    ? citations.find((citation) => citation.source_index === expandedSource)
+    : undefined;
+
+  return (
+    <>
+      <div className="prose max-w-none text-[15px] leading-[1.7]">
+        <ReactMarkdown components={markdownComponents}>{linkedContent}</ReactMarkdown>
+        {streaming && <span className="inline-block align-middle ml-1"><DancingDots size={4} /></span>}
+      </div>
+
+      {citations.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {citations.map((c) => {
+            const sourceIndex = c.source_index;
+            const isExpanded = sourceIndex != null && expandedSource === sourceIndex;
+            return (
+              <button
+                key={c.chunk_id}
+                type="button"
+                id={sourceIndex != null ? citationAnchorId(messageId, sourceIndex) : undefined}
+                title={c.excerpt}
+                onClick={() => sourceIndex != null && openCitation(sourceIndex)}
+                className={clsx(
+                  "citation-chip inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors",
+                  isExpanded
+                    ? "border-[var(--electric-violet)] bg-[var(--iris-haze)] text-[var(--deep-ink)]"
+                    : "border-[var(--lavender-mist)] bg-[var(--pure-paper)] text-[var(--overcast)] hover:border-[var(--electric-violet)]/40 hover:bg-[var(--iris-haze)]",
+                )}
+              >
+                <span className="font-medium text-[var(--electric-violet)]">[{sourceIndex ?? "—"}]</span>
+                {c.document_filename && (
+                  <span className="max-w-[140px] truncate text-[var(--heather)]">{c.document_filename}</span>
+                )}
+                <span>p.{c.page_number ?? "—"} · {(c.score * 100).toFixed(0)}%</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {expandedCitation && (
+        <div className="mt-2 rounded-[var(--radius)] border border-[var(--lavender-mist)] bg-[var(--iris-haze)] px-3 py-2 text-xs text-[var(--heather)]">
+          <p className="mb-1 font-medium text-[var(--deep-ink)]">
+            Source {expandedCitation.source_index}
+            {expandedCitation.document_filename ? ` · ${expandedCitation.document_filename}` : ""}
+            {expandedCitation.page_number != null ? ` · p.${expandedCitation.page_number}` : ""}
+          </p>
+          <p className="leading-relaxed">{expandedCitation.excerpt}</p>
+        </div>
+      )}
+    </>
+  );
+}
+
+/* ─── Types ──────────────────────────────────────────────────── */
+
 type UiMessage = ChatMessage & { streaming?: boolean };
+
+interface LocalSession {
+  id: string;
+  serverSessionId: string | null;
+  title: string;
+  messages: UiMessage[];
+  createdAt: number;
+}
+
+interface UploadItem {
+  file: File;
+  progress: number;
+  status: "pending" | "uploading" | "processing" | "done" | "error";
+  docId?: string;
+  error?: string;
+}
+
+/* ─── Helpers ────────────────────────────────────────────────── */
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function groupSessionsByDate(sessions: LocalSession[]) {
+  const now = Date.now();
+  const groups: { label: string; items: LocalSession[] }[] = [];
+  const buckets: [string, number][] = [
+    ["Today", 86_400_000],
+    ["Yesterday", 172_800_000],
+    ["Previous 7 Days", 604_800_000],
+    ["Previous 30 Days", 2_592_000_000],
+  ];
+  let remaining = [...sessions];
+  for (const [label, max] of buckets) {
+    const match = remaining.filter((s) => now - s.createdAt < max);
+    remaining = remaining.filter((s) => now - s.createdAt >= max);
+    if (match.length) groups.push({ label, items: match });
+  }
+  if (remaining.length) groups.push({ label: "Older", items: remaining });
+  return groups;
+}
+
+/* ─── Main Component ─────────────────────────────────────────── */
 
 export default function VaultApp() {
   const [documents, setDocuments] = useState<DocumentSummary[]>([]);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<UiMessage[]>([]);
+  const [sessions, setSessions] = useState<LocalSession[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploads, setUploads] = useState<UploadItem[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+
   const [question, setQuestion] = useState("");
-  const [uploading, setUploading] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [streaming, setStreaming] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [queuedCount, setQueuedCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
-  const readyDocuments = useMemo(
-    () => documents.filter((document) => document.status === "ready"),
-    [documents],
-  );
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const cancelledRef = useRef(false);
+  const messageQueueRef = useRef<string[]>([]);
+  const activeRequestRef = useRef<{ sessionId: string; assistantId: string } | null>(null);
 
-  async function refreshDocuments() {
-    try {
-      const response = await listDocuments();
-      setDocuments(response.items);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load documents");
-    }
-  }
+  const activeSession = useMemo(
+    () => sessions.find((s) => s.id === activeSessionId) ?? null,
+    [sessions, activeSessionId],
+  );
+  const readyDocs = useMemo(() => documents.filter((d) => d.status === "ready"), [documents]);
+  const sessionGroups = useMemo(() => groupSessionsByDate(sessions), [sessions]);
+
+  useEffect(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = Math.min(ta.scrollHeight, 200) + "px";
+  }, [question]);
+
+  const refreshDocuments = useCallback(async () => {
+    try { setDocuments((await listDocuments()).items); } catch { /* retry */ }
+  }, []);
 
   useEffect(() => {
     void refreshDocuments();
-    const interval = window.setInterval(() => {
-      void refreshDocuments();
-    }, 5000);
-    return () => window.clearInterval(interval);
-  }, []);
+    const iv = setInterval(() => void refreshDocuments(), 5000);
+    return () => clearInterval(iv);
+  }, [refreshDocuments]);
 
-  async function handleUpload(file: File) {
-    setUploading(true);
-    setError(null);
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [activeSession?.messages, sending]);
+
+  /* ─── Upload ───────────────────────────────────────────────── */
+
+  function addFiles(files: FileList | File[]) {
+    const items: UploadItem[] = Array.from(files).map((f) => ({ file: f, progress: 0, status: "pending" }));
+    setUploads((prev) => [...prev, ...items]);
+    setShowUploadModal(true);
+    for (const item of items) void processUpload(item);
+  }
+
+  async function processUpload(item: UploadItem) {
+    setUploads((p) => p.map((u) => (u.file === item.file ? { ...u, status: "uploading" } : u)));
     try {
-      const uploaded = await uploadDocument(file);
+      const result = await uploadDocument(item.file, (pct) => {
+        setUploads((p) => p.map((u) => (u.file === item.file ? { ...u, progress: pct } : u)));
+      });
+      setUploads((p) => p.map((u) => u.file === item.file ? { ...u, status: "processing", progress: 100, docId: result.id } : u));
       await refreshDocuments();
-      setSelectedIds([uploaded.id]);
-      const poll = window.setInterval(async () => {
-        const status = await getDocumentStatus(uploaded.id);
-        if (status.status === "ready" || status.status === "failed") {
-          window.clearInterval(poll);
-          await refreshDocuments();
-        }
+      const poll = setInterval(async () => {
+        try {
+          const s = await getDocumentStatus(result.id);
+          if (s.status === "ready" || s.status === "failed") {
+            clearInterval(poll);
+            setUploads((p) => p.map((u) => u.file === item.file ? { ...u, status: s.status === "ready" ? "done" : "error", error: s.error_message ?? "Failed" } : u));
+            await refreshDocuments();
+          }
+        } catch { /* retry */ }
       }, 3000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed");
-    } finally {
-      setUploading(false);
+      setUploads((p) => p.map((u) => u.file === item.file ? { ...u, status: "error", error: err instanceof Error ? err.message : "Failed" } : u));
     }
   }
 
-  function toggleDocument(documentId: string) {
-    setSelectedIds((current) =>
-      current.includes(documentId)
-        ? current.filter((id) => id !== documentId)
-        : [...current, documentId],
-    );
-  }
+  /* ─── Sessions ─────────────────────────────────────────────── */
 
-  async function ensureSession() {
-    if (sessionId) return sessionId;
-    if (selectedIds.length === 0) {
-      throw new Error("Select at least one ready document.");
-    }
-    const session = await createChatSession(selectedIds);
-    setSessionId(session.id);
-    return session.id;
-  }
-
-  async function handleAsk(useStream: boolean) {
-    if (!question.trim()) return;
-    setLoading(true);
-    setStreaming(useStream);
+  function startNewChat() {
+    handleCancel();
+    messageQueueRef.current = [];
+    syncQueuedCount();
     setError(null);
-    try {
-      const activeSessionId = await ensureSession();
-      const userMessage: UiMessage = {
-        id: crypto.randomUUID(),
-        role: "user",
-        content: question.trim(),
-        citations: [],
-        suggested_followups: [],
-        created_at: new Date().toISOString(),
-      };
-      setMessages((current) => [...current, userMessage]);
-      setQuestion("");
+    const s: LocalSession = { id: crypto.randomUUID(), serverSessionId: null, title: "New chat", messages: [], createdAt: Date.now() };
+    setSessions((p) => [s, ...p]);
+    setActiveSessionId(s.id);
+    setQuestion("");
+    setTimeout(() => textareaRef.current?.focus(), 50);
+  }
 
-      if (useStream) {
-        const assistantId = crypto.randomUUID();
-        setMessages((current) => [
-          ...current,
-          {
-            id: assistantId,
-            role: "assistant",
-            content: "",
-            citations: [],
-            suggested_followups: [],
-            created_at: new Date().toISOString(),
-            streaming: true,
-          },
-        ]);
-        await streamChatMessage(activeSessionId, userMessage.content, (token) => {
-          setMessages((current) =>
-            current.map((message) =>
-              message.id === assistantId
-                ? { ...message, content: message.content + token }
-                : message,
-            ),
-          );
-        });
-        const history = await getChatHistory(activeSessionId);
-        setMessages(history.messages);
+  function deleteSession(id: string) {
+    setSessions((p) => p.filter((s) => s.id !== id));
+    if (activeSessionId === id) setActiveSessionId(null);
+  }
+
+  /* ─── Chat ─────────────────────────────────────────────────── */
+
+  function syncQueuedCount() {
+    setQueuedCount(messageQueueRef.current.length);
+  }
+
+  function enqueueMessage(q: string) {
+    messageQueueRef.current.push(q);
+    syncQueuedCount();
+    setQuestion("");
+  }
+
+  function handleCancel() {
+    cancelledRef.current = true;
+    abortControllerRef.current?.abort();
+  }
+
+  function finalizeAssistantMessage(sessionId: string, assistantId: string, stopped: boolean) {
+    setSessions((p) => p.map((s) => {
+      if (s.id !== sessionId) return s;
+      return {
+        ...s,
+        messages: s.messages.map((m) => {
+          if (m.id !== assistantId) return m;
+          const content = m.content.trim();
+          if (stopped && !content) {
+            return { ...m, content: "Response stopped.", streaming: false };
+          }
+          return { ...m, streaming: false };
+        }),
+      };
+    }));
+  }
+
+  async function runChatMessage(q: string) {
+    setError(null);
+    setSending(true);
+    cancelledRef.current = false;
+
+    const ac = new AbortController();
+    abortControllerRef.current = ac;
+
+    let current = activeSession;
+    if (!current) {
+      if (readyDocs.length === 0) {
+        setError("Upload and process at least one document first.");
+        setSending(false);
+        abortControllerRef.current = null;
+        return;
+      }
+      const s: LocalSession = {
+        id: crypto.randomUUID(),
+        serverSessionId: null,
+        title: q.slice(0, 50) + (q.length > 50 ? "…" : ""),
+        messages: [],
+        createdAt: Date.now(),
+      };
+      setSessions((p) => [s, ...p]);
+      setActiveSessionId(s.id);
+      current = s;
+    }
+
+    const sid = current.id;
+    const aId = crypto.randomUUID();
+    activeRequestRef.current = { sessionId: sid, assistantId: aId };
+
+    const userMsg: UiMessage = {
+      id: crypto.randomUUID(),
+      role: "user",
+      content: q,
+      citations: [],
+      suggested_followups: [],
+      created_at: new Date().toISOString(),
+    };
+    const aiMsg: UiMessage = {
+      id: aId,
+      role: "assistant",
+      content: "",
+      citations: [],
+      suggested_followups: [],
+      created_at: new Date().toISOString(),
+      streaming: true,
+    };
+
+    setSessions((p) => p.map((s) => s.id === sid ? {
+      ...s,
+      messages: [...s.messages, userMsg, aiMsg],
+      title: s.messages.length === 0 ? q.slice(0, 50) + (q.length > 50 ? "…" : "") : s.title,
+    } : s));
+
+    let serverSid = current.serverSessionId;
+
+    try {
+      if (!serverSid) {
+        if (readyDocs.length === 0) {
+          setSessions((p) => p.map((s) => s.id === sid ? {
+            ...s,
+            messages: s.messages.filter((m) => m.id !== userMsg.id && m.id !== aId),
+          } : s));
+          setError("No documents ready.");
+          return;
+        }
+        const res = await createChatSession(readyDocs.map((d) => d.id), ac.signal);
+        serverSid = res.id;
+        setSessions((p) => p.map((s) => (s.id === sid ? { ...s, serverSessionId: serverSid } : s)));
+      }
+
+      if (cancelledRef.current) return;
+
+      let gotTokens = false;
+      await streamChatMessage(serverSid!, q, (token) => {
+        gotTokens = true;
+        setSessions((p) => p.map((s) => s.id === sid ? {
+          ...s,
+          messages: s.messages.map((m) => m.id === aId ? { ...m, content: m.content + token } : m),
+        } : s));
+      }, ac.signal);
+
+      if (cancelledRef.current) return;
+
+      if (!gotTokens) {
+        setSessions((p) => p.map((s) => s.id === sid ? {
+          ...s,
+          messages: s.messages.map((m) => m.id === aId ? {
+            ...m,
+            content: "I couldn't generate a response. Please try again.",
+            streaming: false,
+          } : m),
+        } : s));
       } else {
-        await sendChatMessage(activeSessionId, userMessage.content);
-        const history = await getChatHistory(activeSessionId);
-        setMessages(history.messages);
+        try {
+          const h = await getChatHistory(serverSid!);
+          if (h.messages.length > 0) {
+            setSessions((p) => p.map((s) => (s.id === sid ? { ...s, messages: h.messages } : s)));
+          }
+        } catch { /* keep local */ }
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Chat request failed");
+      if (cancelledRef.current || isAbortError(err)) {
+        return;
+      }
+      setSessions((p) => p.map((s) => s.id === sid ? {
+        ...s,
+        messages: s.messages.map((m) => m.id === aId ? {
+          ...m,
+          content: `Error: ${err instanceof Error ? err.message : "Something went wrong"}`,
+          streaming: false,
+        } : m),
+      } : s));
     } finally {
-      setLoading(false);
-      setStreaming(false);
+      const req = activeRequestRef.current;
+      abortControllerRef.current = null;
+      activeRequestRef.current = null;
+
+      if (req) {
+        if (cancelledRef.current) {
+          finalizeAssistantMessage(req.sessionId, req.assistantId, true);
+        } else {
+          setSessions((p) => p.map((s) => s.id === req.sessionId ? {
+            ...s,
+            messages: s.messages.map((m) => m.id === req.assistantId ? { ...m, streaming: false } : m),
+          } : s));
+        }
+      }
+
+      const next = messageQueueRef.current.shift();
+      syncQueuedCount();
+
+      if (next) {
+        void runChatMessage(next);
+      } else {
+        setSending(false);
+      }
     }
   }
 
-  return (
-    <main className="mx-auto grid min-h-screen max-w-6xl gap-6 px-6 py-10 lg:grid-cols-[1fr_1.2fr]">
-      <section className="space-y-6">
-        <header className="space-y-2">
-          <p className="text-sm uppercase tracking-widest text-slate-400">Document Vault AI</p>
-          <h1 className="text-3xl font-semibold">Upload. Process. Chat.</h1>
-          <p className="text-slate-300">
-            Select one or more ready documents and ask questions with citations.
-          </p>
-        </header>
+  function handleSend() {
+    const q = question.trim();
+    if (!q) return;
 
-        <div className="rounded-xl border border-slate-700 bg-slate-900/60 p-5">
-          <h2 className="mb-3 font-medium">Upload</h2>
-          <input
-            type="file"
-            accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            disabled={uploading}
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) void handleUpload(file);
-            }}
-            className="block w-full text-sm text-slate-300"
-          />
+    if (sending) {
+      enqueueMessage(q);
+      return;
+    }
+
+    setQuestion("");
+    void runChatMessage(q);
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void handleSend(); }
+  }
+
+  /* ─── Drag & drop ──────────────────────────────────────────── */
+  function handleDragOver(e: React.DragEvent) { e.preventDefault(); setIsDragging(true); }
+  function handleDragLeave(e: React.DragEvent) { e.preventDefault(); if (e.currentTarget === e.target) setIsDragging(false); }
+  function handleDrop(e: React.DragEvent) { e.preventDefault(); setIsDragging(false); if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files); }
+
+  /* ─── Input box (render helper — NOT a component) ──────────── */
+  const inputBox = (autoFocus?: boolean) => (
+    <div className="relative rounded-[var(--radius-lg)] border border-[var(--lavender-mist)] bg-[var(--pure-paper)] shadow-sm">
+      {/* Thinking bar — shows above textarea when AI is working */}
+      {sending && (
+        <div className="flex items-center justify-between gap-2 border-b border-[var(--lavender-mist)] bg-[var(--iris-haze)]/60 px-4 py-2">
+          <InlineThinkingBar />
+          <button
+            type="button"
+            onClick={handleCancel}
+            className="flex shrink-0 items-center gap-1.5 rounded-full border border-[var(--lavender-mist)] bg-[var(--pure-paper)] px-3 py-1 text-xs font-medium text-[var(--heather)] transition-colors hover:border-[var(--electric-violet)] hover:text-[var(--electric-violet)]"
+          >
+            <IconStop className="h-2.5 w-2.5" />
+            Stop
+          </button>
         </div>
+      )}
+      <textarea
+        ref={textareaRef}
+        value={question}
+        onChange={(e) => setQuestion(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder={sending ? "Type a follow-up — it'll be queued automatically…" : "Ask anything about your documents…"}
+        rows={1}
+        autoFocus={autoFocus}
+        className="w-full resize-none bg-transparent px-4 pb-11 pt-3.5 text-[15px] text-[var(--deep-ink)] placeholder:text-[var(--mist)] focus:outline-none"
+        style={{ maxHeight: "200px", letterSpacing: "0.01em" }}
+      />
+      <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between">
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setShowUploadModal(true)}
+            className="rounded-full p-1.5 text-[var(--mist)] transition-colors hover:bg-[var(--lavender-mist)] hover:text-[var(--heather)]"
+            title="Attach files"
+          >
+            <IconPlus className="h-4 w-4" />
+          </button>
+          {/* Queue badge */}
+          {queuedCount > 0 && (
+            <span className="ml-1 flex items-center gap-1.5 rounded-full bg-[var(--iris-haze)] px-2.5 py-1 text-[11px] font-medium text-[var(--electric-violet)]">
+              <IconLoader className="h-3 w-3" />
+              {queuedCount} queued
+            </span>
+          )}
+        </div>
+        {sending ? (
+          <button
+            onClick={handleCancel}
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--deep-ink)] text-white shadow-sm transition-all hover:bg-[var(--midnight-plum)]"
+            title="Stop generating"
+          >
+            <IconStop />
+          </button>
+        ) : (
+          <button
+            onClick={() => void handleSend()}
+            disabled={!question.trim()}
+            className={clsx(
+              "flex h-8 w-8 items-center justify-center rounded-full transition-all",
+              question.trim()
+                ? "bg-[var(--electric-violet)] text-white shadow-sm shadow-[var(--electric-violet)]/25 hover:opacity-90"
+                : "bg-[var(--lavender-mist)] text-[var(--mist)] cursor-not-allowed",
+            )}
+            title="Send message"
+          >
+            <IconSend />
+          </button>
+        )}
+      </div>
+    </div>
+  );
 
-        <div className="rounded-xl border border-slate-700 bg-slate-900/60 p-5">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="font-medium">Documents</h2>
-            <button
-              type="button"
-              onClick={() => void refreshDocuments()}
-              className="text-sm text-sky-400 hover:text-sky-300"
-            >
-              Refresh
+  /* ─── Render ───────────────────────────────────────────────── */
+
+  return (
+    <div className="flex h-screen w-screen overflow-hidden bg-[var(--iris-haze)]" onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
+
+      {/* Drag overlay */}
+      {isDragging && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--midnight-plum)]/60 backdrop-blur-sm">
+          <div className="rounded-[var(--radius-lg)] border-2 border-dashed border-[var(--electric-violet)]/40 bg-[var(--pure-paper)]/90 p-14 text-center shadow-xl">
+            <IconUpload className="mx-auto mb-3 h-10 w-10 text-[var(--electric-violet)]" />
+            <p className="text-base font-medium text-[var(--deep-ink)]">Drop files to upload</p>
+            <p className="mt-1 text-sm text-[var(--overcast)]">PDF, DOCX</p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Sidebar ── */}
+      <aside className={clsx("flex flex-col bg-[var(--pure-paper)] border-r border-[var(--lavender-mist)] transition-all duration-200 ease-in-out overflow-hidden", sidebarOpen ? "w-[260px]" : "w-0")}>
+        <div className="flex min-w-[260px] flex-col h-full">
+
+          {/* Top row */}
+          <div className="flex items-center justify-between px-3 py-3">
+            <button onClick={() => setSidebarOpen(false)} className="rounded-[var(--radius)] p-1.5 text-[var(--heather)] hover:bg-[var(--iris-haze)]" title="Close sidebar">
+              <IconSidebar />
+            </button>
+            <button onClick={startNewChat} className="rounded-[var(--radius)] p-1.5 text-[var(--heather)] hover:bg-[var(--iris-haze)]" title="New chat">
+              <IconNewChat />
             </button>
           </div>
-          <div className="space-y-2">
-            {documents.length === 0 && (
-              <p className="text-sm text-slate-400">No documents yet. Upload a PDF or DOCX.</p>
-            )}
-            {documents.map((document) => (
-              <label
-                key={document.id}
-                className="flex cursor-pointer items-center justify-between rounded-lg border border-slate-700 px-3 py-2"
-              >
-                <div>
-                  <p className="font-medium">{document.filename}</p>
-                  <p className="text-xs text-slate-400">{document.status}</p>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={selectedIds.includes(document.id)}
-                  disabled={document.status !== "ready"}
-                  onChange={() => toggleDocument(document.id)}
-                />
-              </label>
-            ))}
-          </div>
-          <p className="mt-3 text-xs text-slate-400">
-            {readyDocuments.length} ready · {selectedIds.length} selected
-          </p>
-        </div>
-      </section>
 
-      <section className="flex min-h-[70vh] flex-col rounded-xl border border-slate-700 bg-slate-900/60 p-5">
-        <h2 className="mb-4 font-medium">Chat</h2>
-        {error && <p className="mb-3 text-sm text-amber-400">{error}</p>}
-        <div className="flex-1 space-y-4 overflow-y-auto pr-2">
-          {messages.length === 0 && (
-            <p className="text-sm text-slate-400">
-              Select ready documents, then ask a question. Try streaming for live tokens.
-            </p>
-          )}
-          {messages.map((message) => (
-            <div
-              key={message.id}
-              className={`rounded-lg px-4 py-3 ${
-                message.role === "user" ? "bg-sky-950/70" : "bg-slate-800/80"
-              }`}
+          {/* Conversations */}
+          <nav className="flex-1 overflow-y-auto px-2 pb-2">
+            {sessionGroups.length === 0 ? (
+              <p className="px-3 py-8 text-center text-sm text-[var(--mist)]">No conversations yet</p>
+            ) : (
+              sessionGroups.map((g) => (
+                <div key={g.label} className="mt-5 first:mt-0">
+                  <p className="px-3 pb-1 text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--mist)]">{g.label}</p>
+                  {g.items.map((s) => (
+                    <div
+                      key={s.id}
+                      onClick={() => setActiveSessionId(s.id)}
+                      className={clsx(
+                        "group relative flex cursor-pointer items-center rounded-[var(--radius)] px-3 py-2 text-[14px] transition-colors",
+                        activeSessionId === s.id
+                          ? "bg-[var(--iris-haze)] text-[var(--deep-ink)]"
+                          : "text-[var(--heather)] hover:bg-[var(--iris-haze)]",
+                      )}
+                    >
+                      <span className="flex-1 truncate">{s.title}</span>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); deleteSession(s.id); }}
+                        className="shrink-0 rounded-md p-1 text-[var(--mist)] opacity-0 transition-opacity hover:text-[var(--danger)] group-hover:opacity-100"
+                      >
+                        <IconTrash />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ))
+            )}
+          </nav>
+
+          {/* Bottom */}
+          <div className="border-t border-[var(--lavender-mist)] px-3 py-3">
+            <button
+              onClick={() => setShowUploadModal(true)}
+              className="flex w-full items-center gap-2 rounded-[var(--radius)] px-3 py-2 text-[14px] text-[var(--heather)] transition-colors hover:bg-[var(--iris-haze)]"
             >
-              <p className="mb-1 text-xs uppercase tracking-wide text-slate-400">{message.role}</p>
-              <p className="whitespace-pre-wrap text-sm">{message.content}</p>
-              {message.citations?.length > 0 && (
-                <div className="mt-3 space-y-2">
-                  {message.citations.map((citation) => (
-                    <div key={citation.chunk_id} className="rounded border border-slate-700 p-2 text-xs">
-                      <p className="text-slate-400">Page {citation.page_number ?? "?"} · score {citation.score}</p>
-                      <p>{citation.excerpt}</p>
+              <IconFile />
+              <span className="flex-1 text-left">Documents</span>
+              {readyDocs.length > 0 && (
+                <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[var(--electric-violet)] px-1.5 text-[11px] font-medium text-white">
+                  {readyDocs.length}
+                </span>
+              )}
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      {/* ── Main ── */}
+      <main className="flex flex-1 flex-col">
+
+        {/* Top bar */}
+        <div className="flex items-center h-12 px-4">
+          {!sidebarOpen && (
+            <>
+              <button onClick={() => setSidebarOpen(true)} className="rounded-[var(--radius)] p-1.5 text-[var(--heather)] hover:bg-[var(--lavender-mist)]" title="Open sidebar">
+                <IconSidebar />
+              </button>
+              <button onClick={startNewChat} className="ml-1 rounded-[var(--radius)] p-1.5 text-[var(--heather)] hover:bg-[var(--lavender-mist)]" title="New chat">
+                <IconNewChat />
+              </button>
+            </>
+          )}
+          <div className="flex-1" />
+          <span className="font-semibold tracking-[-0.02em] text-[var(--deep-ink)]" style={{ fontFamily: "'Source Serif 4', serif" }}>
+            Document Vault
+          </span>
+          <div className="flex-1" />
+          {readyDocs.length > 0 && (
+            <span className="text-xs text-[var(--overcast)]">{readyDocs.length} doc{readyDocs.length !== 1 ? "s" : ""}</span>
+          )}
+        </div>
+
+        {/* Content */}
+        {!activeSession && !sending ? (
+          <div className="flex flex-1 flex-col items-center justify-center px-4 pb-40">
+            <h1 className="mb-2 text-[28px] font-medium tracking-[-0.03em] text-[var(--deep-ink)]" style={{ fontFamily: "'Source Serif 4', serif" }}>
+              What can I help with?
+            </h1>
+            <p className="mb-8 text-[15px] text-[var(--overcast)]">
+              Ask anything about your uploaded documents
+            </p>
+            <div className="w-full max-w-[640px]">
+              {inputBox(true)}
+              {error && <p className="mt-3 rounded-[var(--radius)] bg-[var(--danger-bg)] px-4 py-2 text-sm text-[var(--danger)]">{error}</p>}
+              <p className="mt-3 text-center text-xs text-[var(--mist)]">
+                Searches all {readyDocs.length} document{readyDocs.length !== 1 ? "s" : ""} automatically
+              </p>
+            </div>
+          </div>
+        ) : activeSession ? (
+          <>
+            <div className="flex-1 overflow-y-auto">
+              {activeSession.messages.length === 0 && !sending ? (
+                <div className="flex h-full flex-col items-center justify-center pb-40">
+                  <h2 className="text-[28px] font-medium tracking-[-0.03em] text-[var(--deep-ink)]" style={{ fontFamily: "'Source Serif 4', serif" }}>
+                    What can I help with?
+                  </h2>
+                </div>
+              ) : (
+                <div className="mx-auto max-w-[700px] px-4 py-6">
+                  {activeSession.messages.map((msg) => {
+                    if (isAssistantPending(msg)) {
+                      return <ThinkingIndicator key={msg.id} />;
+                    }
+
+                    return (
+                      <div key={msg.id} className="mb-6">
+                        {msg.role === "user" ? (
+                          <div className="flex justify-end">
+                            <div className="max-w-[85%] rounded-[20px] bg-[var(--electric-violet)] px-5 py-3 text-[15px] leading-[1.6] text-white">
+                              {msg.content}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex gap-3">
+                            <div className="mt-1"><AiAvatar /></div>
+                            <div className="min-w-0 flex-1 pt-1">
+                              <AssistantMessageBody
+                                messageId={msg.id}
+                                content={msg.content}
+                                citations={msg.citations ?? []}
+                                streaming={msg.streaming && msg.content.trim().length > 0}
+                              />
+
+                              {msg.suggested_followups?.length > 0 && (
+                                <div className="mt-3 flex flex-wrap gap-1.5">
+                                  {msg.suggested_followups.map((f) => (
+                                    <button key={f} onClick={() => setQuestion(f)} className="rounded-full border border-[var(--lavender-mist)] px-3.5 py-1.5 text-[13px] text-[var(--heather)] transition-colors hover:border-[var(--electric-violet)] hover:text-[var(--electric-violet)]">
+                                      {f}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  <div ref={chatEndRef} />
+                </div>
+              )}
+            </div>
+
+            {/* Input */}
+            <div className="px-4 pb-4 pt-2">
+              <div className="mx-auto max-w-[700px]">
+                {error && <p className="mb-2 rounded-[var(--radius)] bg-[var(--danger-bg)] px-4 py-2 text-sm text-[var(--danger)]">{error}</p>}
+                {inputBox()}
+                <p className="mt-2 text-center text-xs text-[var(--mist)]">
+                  Document Vault AI can make mistakes. Review important info.
+                </p>
+              </div>
+            </div>
+          </>
+        ) : null}
+      </main>
+
+      {/* ── Upload Modal ── */}
+      {showUploadModal && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-[var(--midnight-plum)]/40 backdrop-blur-sm">
+          <div className="mx-4 w-full max-w-lg rounded-[var(--radius-lg)] bg-[var(--pure-paper)] shadow-xl shadow-[var(--deep-ink)]/10">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-[var(--lavender-mist)] px-5 py-4">
+              <h3 className="text-base font-semibold text-[var(--deep-ink)]" style={{ fontFamily: "'Source Serif 4', serif" }}>Documents</h3>
+              <button onClick={() => { setShowUploadModal(false); setUploads((p) => p.filter((u) => u.status !== "done" && u.status !== "error")); }} className="rounded-full p-1 text-[var(--mist)] hover:bg-[var(--iris-haze)] hover:text-[var(--heather)]">
+                <IconX />
+              </button>
+            </div>
+
+            <div className="p-5">
+              {/* Drop zone */}
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                className="cursor-pointer rounded-[var(--radius-lg)] border-2 border-dashed border-[var(--lavender-mist)] p-8 text-center transition-colors hover:border-[var(--electric-violet)]/40 hover:bg-[var(--iris-haze)]"
+              >
+                <IconUpload className="mx-auto mb-2 text-[var(--mist)]" />
+                <p className="text-sm text-[var(--deep-ink)]">
+                  <span className="font-medium text-[var(--electric-violet)]">Click to browse</span> or drag and drop
+                </p>
+                <p className="mt-1 text-xs text-[var(--overcast)]">PDF, DOCX — multiple files</p>
+                <input ref={fileInputRef} type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple className="hidden" onChange={(e) => { if (e.target.files?.length) addFiles(e.target.files); e.target.value = ""; }} />
+              </div>
+
+              {/* Upload items */}
+              {uploads.length > 0 && (
+                <div className="mt-3 max-h-40 space-y-1.5 overflow-y-auto">
+                  {uploads.map((u, i) => (
+                    <div key={i} className="flex items-center gap-3 rounded-[var(--radius)] border border-[var(--lavender-mist)] px-3 py-2.5">
+                      <IconFile className="shrink-0 text-[var(--mist)]" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm text-[var(--deep-ink)]">{u.file.name}</p>
+                        {u.status === "uploading" && (
+                          <div className="mt-1 h-1.5 rounded-full bg-[var(--lavender-mist)]">
+                            <div className="h-full rounded-full bg-[var(--electric-violet)] transition-all" style={{ width: `${u.progress}%` }} />
+                          </div>
+                        )}
+                        {u.status === "processing" && <p className="mt-0.5 text-xs text-[var(--warning)]">Processing…</p>}
+                        {u.status === "done" && <p className="mt-0.5 flex items-center gap-1 text-xs text-[var(--success)]"><IconCheck /> Ready</p>}
+                        {u.status === "error" && <p className="mt-0.5 text-xs text-[var(--danger)]">{u.error}</p>}
+                        {u.status === "pending" && <p className="mt-0.5 text-xs text-[var(--mist)]">Queued</p>}
+                      </div>
+                      <span className="text-xs text-[var(--overcast)]">{formatFileSize(u.file.size)}</span>
                     </div>
                   ))}
                 </div>
               )}
-              {message.suggested_followups?.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {message.suggested_followups.map((followup) => (
-                    <button
-                      key={followup}
-                      type="button"
-                      onClick={() => setQuestion(followup)}
-                      className="rounded-full border border-slate-600 px-3 py-1 text-xs hover:border-sky-500"
-                    >
-                      {followup}
-                    </button>
-                  ))}
+
+              {/* Existing documents */}
+              {documents.length > 0 && (
+                <div className="mt-4 border-t border-[var(--lavender-mist)] pt-3">
+                  <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--mist)]">Uploaded documents</p>
+                  <div className="max-h-48 space-y-1 overflow-y-auto">
+                    {documents.map((doc) => (
+                      <div key={doc.id} className="flex items-center gap-2.5 rounded-[var(--radius)] px-3 py-2 hover:bg-[var(--iris-haze)]">
+                        <IconFile className="shrink-0 text-[var(--mist)]" />
+                        <span className="flex-1 truncate text-sm text-[var(--deep-ink)]">{doc.filename}</span>
+                        <span className={clsx("text-xs", doc.status === "ready" ? "text-[var(--success)]" : doc.status === "processing" ? "text-[var(--warning)]" : doc.status === "failed" ? "text-[var(--danger)]" : "text-[var(--overcast)]")}>
+                          {doc.status === "ready" ? "Ready" : doc.status === "processing" ? "Processing" : doc.status === "failed" ? "Failed" : "Uploaded"}
+                        </span>
+                        <span className="text-xs text-[var(--overcast)]">{formatFileSize(doc.file_size_bytes)}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
-          ))}
-        </div>
 
-        <div className="mt-4 space-y-3 border-t border-slate-700 pt-4">
-          <textarea
-            value={question}
-            onChange={(event) => setQuestion(event.target.value)}
-            placeholder="Ask about your selected documents..."
-            className="min-h-[96px] w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
-          />
-          <div className="flex gap-3">
-            <button
-              type="button"
-              disabled={loading || selectedIds.length === 0}
-              onClick={() => void handleAsk(false)}
-              className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium disabled:opacity-50"
-            >
-              Ask
-            </button>
-            <button
-              type="button"
-              disabled={loading || selectedIds.length === 0}
-              onClick={() => void handleAsk(true)}
-              className="rounded-lg border border-sky-500 px-4 py-2 text-sm font-medium disabled:opacity-50"
-            >
-              {streaming ? "Streaming..." : "Stream"}
-            </button>
+            <div className="flex justify-end border-t border-[var(--lavender-mist)] px-5 py-3">
+              <button onClick={() => { setShowUploadModal(false); setUploads([]); }} className="rounded-full bg-[var(--electric-violet)] px-5 py-2 text-sm font-medium text-white shadow-sm shadow-[var(--electric-violet)]/25 transition-opacity hover:opacity-90">
+                Done
+              </button>
+            </div>
           </div>
         </div>
-      </section>
-    </main>
+      )}
+    </div>
   );
 }
