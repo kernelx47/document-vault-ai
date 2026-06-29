@@ -123,3 +123,104 @@ body {
 .inline-source-citation:hover {
   background-color: var(--iris-haze);
 }
+
+/* ── Admin platform dashboard ─────────────────────────────────── */
+
+.admin-shell {
+  --admin-bg: #f1f2f9;
+  --admin-surface: rgba(241, 242, 249, 0.8);
+  --admin-card: rgba(255, 255, 255, 0.82);
+  --admin-border: rgba(231, 230, 244, 0.95);
+  --admin-text: #281950;
+  --admin-muted: #676b89;
+  --admin-header: rgba(255, 255, 255, 0.72);
+  background: var(--admin-bg);
+}
+
+.admin-shell[data-theme="dark"] {
+  --admin-bg: #0f0a1a;
+  --admin-surface: rgba(25, 16, 52, 0.65);
+  --admin-card: rgba(30, 22, 56, 0.88);
+  --admin-border: rgba(124, 58, 237, 0.14);
+  --admin-text: #f1f2f9;
+  --admin-muted: #a39ac1;
+  --admin-header: rgba(25, 16, 52, 0.82);
+}
+
+.admin-sidebar {
+  background: linear-gradient(180deg, #191034 0%, #1e1638 50%, #191034 100%);
+}
+
+.admin-main {
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(124, 58, 237, 0.08), transparent),
+    linear-gradient(180deg, #f8f9fc 0%, var(--admin-bg) 100%);
+}
+
+.admin-shell[data-theme="dark"] .admin-main {
+  background:
+    radial-gradient(ellipse 80% 40% at 50% -10%, rgba(124, 58, 237, 0.12), transparent),
+    linear-gradient(180deg, #120b22 0%, var(--admin-bg) 100%);
+}
+
+.admin-grid-bg {
+  background-image:
+    linear-gradient(rgba(124, 58, 237, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(124, 58, 237, 0.03) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.admin-shell[data-theme="dark"] .admin-grid-bg {
+  background-image:
+    linear-gradient(rgba(124, 58, 237, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(124, 58, 237, 0.06) 1px, transparent 1px);
+}
+
+.admin-stat-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.admin-stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgb(40 25 80 / 8%);
+}
+
+.admin-chart-card {
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.admin-chart-card:hover {
+  box-shadow: 0 12px 40px rgb(40 25 80 / 7%);
+  border-color: rgba(124, 58, 237, 0.15);
+}
+
+.admin-shell[data-theme="dark"] .admin-chart-card:hover {
+  border-color: rgba(167, 139, 250, 0.28);
+}
+
+.admin-shell[data-theme="dark"] .recharts-cartesian-grid-horizontal line,
+.admin-shell[data-theme="dark"] .recharts-cartesian-grid-vertical line {
+  stroke: rgba(124, 58, 237, 0.12);
+}
+
+.admin-shell[data-theme="dark"] .recharts-text {
+  fill: #a39ac1;
+}
+
+.admin-live-pulse span:first-child {
+  animation: admin-pulse 2s ease-in-out infinite;
+}
+
+@keyframes admin-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.85); }
+}
+
+.admin-content-enter {
+  animation: admin-fade-in 0.35s ease-out;
+}
+
+@keyframes admin-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}

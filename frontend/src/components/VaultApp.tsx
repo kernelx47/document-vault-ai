@@ -115,11 +115,38 @@ function IconUpload({ className }: { className?: string }) {
   );
 }
 
+function BrandLogo({ size = 22 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="vaultGrad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#7c3aed" />
+          <stop offset="1" stopColor="#a855f7" />
+        </linearGradient>
+        <linearGradient id="sparkGrad" x1="16" y1="4" x2="16" y2="28" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#c4b5fd" />
+          <stop offset="1" stopColor="#ffffff" />
+        </linearGradient>
+      </defs>
+      <rect x="2" y="2" width="28" height="28" rx="8" fill="url(#vaultGrad)" />
+      <path d="M16 7L16 11M16 21L16 25M7 16H11M21 16H25" stroke="url(#sparkGrad)" strokeWidth="1.5" strokeLinecap="round" opacity="0.5" />
+      <path d="M10 13.5C10 11.015 12.686 9 16 9s6 2.015 6 4.5V17c0 .552-.448 1-1 1H11c-.552 0-1-.448-1-1v-3.5z" fill="white" fillOpacity="0.9" />
+      <rect x="14.5" y="13" width="3" height="3.5" rx="1.5" fill="url(#vaultGrad)" />
+      <path d="M16 15.5V17" stroke="url(#vaultGrad)" strokeWidth="1.2" strokeLinecap="round" />
+      <path d="M11 18h10v2.5a2.5 2.5 0 01-2.5 2.5h-5A2.5 2.5 0 0111 20.5V18z" fill="white" fillOpacity="0.25" />
+      <circle cx="24" cy="8" r="3" fill="#facc15" />
+      <path d="M24 6.5v1.5h1.5" stroke="#a16207" strokeWidth="0.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 function AiAvatar() {
   return (
-    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--electric-violet)]">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5">
-        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[var(--electric-violet)] to-purple-500 shadow-sm shadow-purple-300/40">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+        <path d="M12 3l-1.5 4.5L6 9l4.5 1.5L12 15l1.5-4.5L18 9l-4.5-1.5L12 3z" fill="white" />
+        <path d="M6 16l-1 3 3-1 2.5-2.5L8.5 13.5 6 16z" fill="white" opacity="0.6" />
+        <path d="M18 16l1 3-3-1-2.5-2.5 2-2L18 16z" fill="white" opacity="0.6" />
       </svg>
     </div>
   );
@@ -774,7 +801,7 @@ export default function VaultApp() {
         value={question}
         onChange={(e) => setQuestion(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder={sending ? "Type a follow-up — it'll be queued automatically…" : "Ask anything about your documents…"}
+        placeholder={sending ? "Type a follow-up — it'll be queued automatically…" : "What would you like to discover…"}
         rows={1}
         autoFocus={autoFocus}
         className="w-full resize-none bg-transparent px-4 pb-11 pt-3.5 text-[15px] text-[var(--deep-ink)] placeholder:text-[var(--mist)] focus:outline-none"
@@ -909,7 +936,7 @@ export default function VaultApp() {
                 <path d="M3 3v18h18" />
                 <path d="M7 14l4-4 4 4 5-6" />
               </svg>
-              <span className="flex-1 text-left">Platform metrics</span>
+              <span className="flex-1 text-left">Insights dashboard</span>
             </Link>
           </div>
         </div>
@@ -931,9 +958,12 @@ export default function VaultApp() {
             </>
           )}
           <div className="flex-1" />
-          <span className="font-semibold tracking-[-0.02em] text-[var(--deep-ink)]" style={{ fontFamily: "'Source Serif 4', serif" }}>
-            Document Vault
-          </span>
+          <div className="flex items-center gap-2">
+            <BrandLogo size={24} />
+            <span className="font-semibold tracking-[-0.02em] text-[var(--deep-ink)]" style={{ fontFamily: "'Source Serif 4', serif" }}>
+              Vault<span className="bg-gradient-to-r from-[var(--electric-violet)] to-purple-500 bg-clip-text text-transparent">Mind</span>
+            </span>
+          </div>
           <div className="flex-1" />
           {readyDocs.length > 0 && (
             <span className="text-xs text-[var(--overcast)]">{readyDocs.length} doc{readyDocs.length !== 1 ? "s" : ""}</span>
@@ -943,17 +973,18 @@ export default function VaultApp() {
         {/* Content */}
         {!activeSession && !sending ? (
           <div className="flex flex-1 flex-col items-center justify-center px-4 pb-40">
+            <div className="mb-4 flex items-center justify-center"><BrandLogo size={40} /></div>
             <h1 className="mb-2 text-[28px] font-medium tracking-[-0.03em] text-[var(--deep-ink)]" style={{ fontFamily: "'Source Serif 4', serif" }}>
-              What can I help with?
+              Your documents, <span className="bg-gradient-to-r from-[var(--electric-violet)] to-purple-500 bg-clip-text text-transparent">decoded</span>.
             </h1>
             <p className="mb-8 text-[15px] text-[var(--overcast)]">
-              Ask anything about your uploaded documents
+              Ask a question &mdash; get answers backed by every page
             </p>
             <div className="w-full max-w-[640px]">
               {inputBox(true)}
               {error && <p className="mt-3 rounded-[var(--radius)] bg-[var(--danger-bg)] px-4 py-2 text-sm text-[var(--danger)]">{error}</p>}
               <p className="mt-3 text-center text-xs text-[var(--mist)]">
-                Searches all {readyDocs.length} document{readyDocs.length !== 1 ? "s" : ""} automatically
+                Instantly searches across {readyDocs.length} document{readyDocs.length !== 1 ? "s" : ""} in your vault
               </p>
             </div>
           </div>
@@ -962,8 +993,9 @@ export default function VaultApp() {
             <div className="flex-1 overflow-y-auto">
               {activeSession.messages.length === 0 && !sending ? (
                 <div className="flex h-full flex-col items-center justify-center pb-40">
+                  <div className="mb-3 flex items-center justify-center"><BrandLogo size={36} /></div>
                   <h2 className="text-[28px] font-medium tracking-[-0.03em] text-[var(--deep-ink)]" style={{ fontFamily: "'Source Serif 4', serif" }}>
-                    What can I help with?
+                    Ready when you are.
                   </h2>
                 </div>
               ) : (
@@ -1018,7 +1050,7 @@ export default function VaultApp() {
                 {error && <p className="mb-2 rounded-[var(--radius)] bg-[var(--danger-bg)] px-4 py-2 text-sm text-[var(--danger)]">{error}</p>}
                 {inputBox()}
                 <p className="mt-2 text-center text-xs text-[var(--mist)]">
-                  Document Vault AI can make mistakes. Review important info.
+                  AI-assisted insights &mdash; always verify critical details.
                 </p>
               </div>
             </div>
@@ -1032,7 +1064,7 @@ export default function VaultApp() {
           <div className="mx-4 w-full max-w-lg rounded-[var(--radius-lg)] bg-[var(--pure-paper)] shadow-xl shadow-[var(--deep-ink)]/10">
             {/* Header */}
             <div className="flex items-center justify-between border-b border-[var(--lavender-mist)] px-5 py-4">
-              <h3 className="text-base font-semibold text-[var(--deep-ink)]" style={{ fontFamily: "'Source Serif 4', serif" }}>Documents</h3>
+              <h3 className="text-base font-semibold text-[var(--deep-ink)]" style={{ fontFamily: "'Source Serif 4', serif" }}>Your Vault</h3>
               <button onClick={() => { setShowUploadModal(false); setUploads((p) => p.filter((u) => u.status !== "done" && u.status !== "error")); }} className="rounded-full p-1 text-[var(--mist)] hover:bg-[var(--iris-haze)] hover:text-[var(--heather)]">
                 <IconX />
               </button>
