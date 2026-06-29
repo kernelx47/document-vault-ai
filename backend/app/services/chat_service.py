@@ -1,11 +1,14 @@
+import logging
 import uuid
 from collections.abc import AsyncIterator
 
 from fastapi import HTTPException, status
+from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.ai.guardrails import InputBlockedError, check_input_async, check_output, check_output_async
 from app.ai.langchain_rag import stream_answer as langchain_stream_answer
 from app.ai.llm import generate_followup_suggestions
 from app.config import get_settings
@@ -26,7 +29,9 @@ from app.schemas.chat import (
     Citation,
     MultiChatSessionCreateRequest,
 )
-from app.services.rag_service import generate_rag_answer, retrieve_chunks, to_citations
+from app.services.rag_service import finalize_rag_answer, generate_rag_answer, retrieve_for_question
+
+logger = logging.getLogger("app.chat")
 
 
 async def create_chat_session(db: AsyncSession, document_id: uuid.UUID) -> ChatSessionCreateResponse:
@@ -99,13 +104,27 @@ async def ask_question(
     session, history_messages, question = await _prepare_question(db, session_id, payload)
     document_ids = await _get_session_document_ids(db, session)
 
-    answer, citations, chunk_ids = await generate_rag_answer(
-        db,
-        document_ids,
-        question,
-        history_messages,
-    )
-    followups = generate_followup_suggestions(question, answer)
+    try:
+        answer, citations, chunk_ids = await generate_rag_answer(
+            db,
+            document_ids,
+            question,
+            history_messages,
+        )
+    except Exception:
+        logger.exception("RAG answer generation failed for session %s", session_id)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to generate answer. Please try again.",
+        )
+
+    answer = await check_output_async(answer)
+
+    try:
+        followups = generate_followup_suggestions(question, answer)
+    except Exception:
+        logger.debug("Followup generation failed — continuing without suggestions", exc_info=True)
+        followups = []
 
     assistant_message = await _save_assistant_message(
         db, session, answer, citations, chunk_ids, followups
@@ -123,19 +142,21 @@ async def stream_question_answer(
     session, history_messages, question = await _prepare_question(db, session_id, payload)
     document_ids = await _get_session_document_ids(db, session)
 
-    retrieved = await retrieve_chunks(db, document_ids, question)
-    citations = to_citations(retrieved)
-    chunk_ids = [item.chunk.id for item in retrieved]
+    retrieved = await retrieve_for_question(db, document_ids, question, history_messages)
 
     answer_parts: list[str] = []
-    async for token in langchain_stream_answer(
-        db, document_ids, question, history_messages, retrieved
-    ):
+    async for token in langchain_stream_answer(question, history_messages, retrieved):
         answer_parts.append(token)
         yield token
 
     answer = "".join(answer_parts).strip() or "I don't have enough information in these documents."
-    followups = generate_followup_suggestions(question, answer)
+    answer, citations, chunk_ids = finalize_rag_answer(retrieved, answer)
+    answer = await check_output_async(answer)
+    try:
+        followups = generate_followup_suggestions(question, answer)
+    except Exception:
+        logger.debug("Followup generation failed during stream — continuing without suggestions", exc_info=True)
+        followups = []
     assistant_message = await _save_assistant_message(
         db, session, answer, citations, chunk_ids, followups
     )
@@ -175,6 +196,19 @@ async def _prepare_question(
     )
     history_messages = list(history_result.scalars().all())
     question = payload.question.strip()
+    if not question:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Question cannot be empty or whitespace-only.",
+        )
+
+    try:
+        await check_input_async(question)
+    except InputBlockedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=exc.reason,
+        ) from exc
 
     user_message = ChatMessage(
         session_id=session.id,
@@ -259,7 +293,11 @@ def _to_message_response(
     if citations is not None:
         parsed_citations = citations
     elif message.citations:
-        parsed_citations = [Citation.model_validate(item) for item in message.citations]
+        for item in message.citations:
+            try:
+                parsed_citations.append(Citation.model_validate(item))
+            except (ValidationError, Exception):
+                logger.debug("Skipping corrupt citation data: %s", item)
 
     parsed_followups: list[str] = []
     if followups is not None:

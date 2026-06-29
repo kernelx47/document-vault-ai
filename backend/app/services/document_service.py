@@ -1,3 +1,4 @@
+import logging
 import uuid
 from pathlib import Path
 
@@ -19,6 +20,8 @@ from app.schemas.document import (
 )
 from app.workers.tasks import process_document_task
 
+logger = logging.getLogger("app.documents")
+
 ALLOWED_CONTENT_TYPES = {
     "application/pdf",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -30,10 +33,6 @@ class UploadValidationError(Exception):
     def __init__(self, message: str):
         self.message = message
         super().__init__(message)
-
-
-class DocumentNotFoundError(Exception):
-    pass
 
 
 def _validate_upload(file: UploadFile, content: bytes) -> tuple[str, str]:
@@ -76,11 +75,29 @@ def _build_document_record(safe_name: str, content_type: str, content: bytes) ->
     )
 
 
+def _cleanup_file(document: Document) -> None:
+    try:
+        path = Path(document.file_path)
+        if path.exists():
+            path.unlink()
+    except OSError:
+        logger.warning("Failed to clean up orphan file: %s", document.file_path)
+
+
 async def _queue_document(db: AsyncSession, document: Document) -> DocumentUploadResponse:
     db.add(document)
-    await db.commit()
-    await db.refresh(document)
-    process_document_task.delay(str(document.id))
+    try:
+        await db.commit()
+        await db.refresh(document)
+    except Exception:
+        _cleanup_file(document)
+        raise
+
+    try:
+        process_document_task.delay(str(document.id))
+    except Exception:
+        logger.exception("Failed to enqueue document %s — will remain in pending state", document.id)
+
     return DocumentUploadResponse(
         id=document.id,
         filename=document.filename,
@@ -89,7 +106,11 @@ async def _queue_document(db: AsyncSession, document: Document) -> DocumentUploa
 
 
 async def create_document_upload(db: AsyncSession, file: UploadFile) -> DocumentUploadResponse:
-    content = await file.read()
+    try:
+        content = await file.read()
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to read uploaded file.") from exc
+
     try:
         safe_name, content_type = _validate_upload(file, content)
         document = _build_document_record(safe_name, content_type, content)
@@ -130,6 +151,7 @@ async def create_document_uploads_batch(
             await db.rollback()
             failed.append(DocumentUploadBatchFailure(filename=filename, error=exc.message))
         except Exception:
+            logger.exception("Batch upload failed for file: %s", filename)
             await db.rollback()
             failed.append(
                 DocumentUploadBatchFailure(

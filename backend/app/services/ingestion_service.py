@@ -1,3 +1,4 @@
+import logging
 import time
 import uuid
 from datetime import UTC, datetime
@@ -11,12 +12,27 @@ from app.ai.llm import generate_summary_and_insights
 from app.db.sync_session import SessionLocal
 from app.models import Document, DocumentChunk, DocumentStatus, ProcessingJob, ProcessingJobStatus
 
+logger = logging.getLogger("app.ingestion")
+
+
+def _sanitize_error(exc: Exception) -> str:
+    """Return a safe error message that won't leak internal paths or secrets."""
+    error_type = type(exc).__name__
+    message = str(exc)
+    for prefix in ("/", "C:\\"):
+        if prefix in message:
+            return f"{error_type}: Document processing failed"
+    if len(message) > 200:
+        message = message[:200] + "..."
+    return f"{error_type}: {message}"
+
 
 def process_document(document_id: uuid.UUID) -> None:
     session = SessionLocal()
     try:
         document = session.get(Document, document_id)
         if document is None:
+            logger.warning("Document %s not found — skipping", document_id)
             return
 
         document.status = DocumentStatus.PROCESSING
@@ -24,26 +40,33 @@ def process_document(document_id: uuid.UUID) -> None:
         document.error_message = None
         session.commit()
 
+        logger.info("Starting ingestion pipeline for document %s (%s)", document_id, document.filename)
+
         _run_stage(session, document, "extract", lambda: _extract_stage(session, document))
         _run_stage(session, document, "chunk", lambda: _chunk_stage(session, document))
         _run_stage(session, document, "embed", lambda: _embed_stage(session, document))
         _run_stage(session, document, "summarize", lambda: _summarize_stage(session, document))
         _run_stage(session, document, "complete", lambda: _complete_stage(session, document))
+
+        logger.info("Document %s processed successfully", document_id)
+
     except Exception as exc:
+        logger.exception("Ingestion pipeline failed for document %s", document_id)
         session.rollback()
         document = session.get(Document, document_id)
         if document is not None:
             document.status = DocumentStatus.FAILED
-            document.error_message = str(exc)
+            document.error_message = _sanitize_error(exc)
             session.add(
                 ProcessingJob(
                     document_id=document.id,
                     status=ProcessingJobStatus.FAILED,
                     stage="failed",
-                    error_message=str(exc),
+                    error_message=_sanitize_error(exc),
                 )
             )
             session.commit()
+        raise
     finally:
         session.close()
 
@@ -51,7 +74,15 @@ def process_document(document_id: uuid.UUID) -> None:
 def _run_stage(session: Session, document: Document, stage: str, fn) -> None:
     started = time.perf_counter()
     _record_job(session, document.id, stage, ProcessingJobStatus.STARTED)
-    fn()
+    try:
+        fn()
+    except Exception:
+        duration_ms = int((time.perf_counter() - started) * 1000)
+        _record_job(
+            session, document.id, stage, ProcessingJobStatus.FAILED,
+            duration_ms=duration_ms, error_message=f"Stage '{stage}' failed",
+        )
+        raise
     duration_ms = int((time.perf_counter() - started) * 1000)
     _record_job(
         session,

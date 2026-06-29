@@ -37,18 +37,19 @@ async def ready_document(db_session):
 
 
 @patch("app.services.chat_service.generate_followup_suggestions", return_value=[])
-@patch("app.ai.langchain_rag.generate_answer", new_callable=AsyncMock)
-@patch("app.services.rag_service.retrieve_chunks")
+@patch("app.services.rag_service.generate_answer", new_callable=AsyncMock)
+@patch("app.services.rag_service.retrieve_for_question", new_callable=AsyncMock)
 @pytest.mark.asyncio
 async def test_ask_question_returns_answer_with_citations(
     mock_retrieve,
     mock_generate,
+    _mock_followups,
     db_session,
     ready_document,
 ):
     document, chunk = ready_document
-    mock_retrieve.return_value = [RetrievedChunk(chunk=chunk, score=0.91)]
-    mock_generate.return_value = "The renewal date is December 2025."
+    mock_retrieve.return_value = [RetrievedChunk(chunk=chunk, score=0.91, document_filename="sample.pdf")]
+    mock_generate.return_value = "The renewal date is December 2025 [Source 1]."
 
     session = await chat_service.create_chat_session(db_session, document.id)
     response = await chat_service.ask_question(
@@ -61,6 +62,7 @@ async def test_ask_question_returns_answer_with_citations(
     assert "December 2025" in response.content
     assert len(response.citations) == 1
     assert response.citations[0].page_number == 2
+    assert response.citations[0].document_filename == "sample.pdf"
 
 
 @pytest.mark.asyncio
@@ -72,12 +74,12 @@ async def test_create_chat_session(db_session, ready_document):
 
 @patch("app.services.chat_service.generate_followup_suggestions", return_value=[])
 @pytest.mark.asyncio
-async def test_chat_history_persists_messages(db_session, ready_document):
+async def test_chat_history_persists_messages(_mock_followups, db_session, ready_document):
     document, chunk = ready_document
-    with patch("app.services.rag_service.retrieve_chunks", return_value=[RetrievedChunk(chunk=chunk, score=0.9)]):
+    with patch("app.services.rag_service.retrieve_for_question", new=AsyncMock(return_value=[RetrievedChunk(chunk=chunk, score=0.9)])):
         with patch(
-            "app.ai.langchain_rag.generate_answer",
-            new=AsyncMock(return_value="The renewal date is December 2025."),
+            "app.services.rag_service.generate_answer",
+            new=AsyncMock(return_value="The renewal date is December 2025 [Source 1]."),
         ):
             session = await chat_service.create_chat_session(db_session, document.id)
             await chat_service.ask_question(

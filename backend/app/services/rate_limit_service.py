@@ -1,7 +1,11 @@
+import logging
+
 from redis.asyncio import Redis
 
 from app.config import get_settings
 from app.exceptions import APIError
+
+logger = logging.getLogger("app.rate_limit")
 
 
 async def enforce_upload_rate_limit(client_ip: str) -> None:
@@ -9,7 +13,12 @@ async def enforce_upload_rate_limit(client_ip: str) -> None:
     if settings.upload_rate_limit_per_minute <= 0:
         return
 
-    redis = Redis.from_url(settings.redis_url)
+    try:
+        redis = Redis.from_url(settings.redis_url)
+    except Exception:
+        logger.warning("Redis unavailable for rate limiting — failing open", exc_info=True)
+        return
+
     key = f"rate_limit:upload:{client_ip}"
     try:
         count = await redis.incr(key)
@@ -24,5 +33,9 @@ async def enforce_upload_rate_limit(client_ip: str) -> None:
                 ),
                 error_code="RATE_LIMIT_EXCEEDED",
             )
+    except APIError:
+        raise
+    except Exception:
+        logger.warning("Rate limit check failed — failing open", exc_info=True)
     finally:
         await redis.aclose()
