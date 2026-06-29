@@ -5,6 +5,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
+from app.services.api_latency import record_api_latency
+
 logger = logging.getLogger("app.request")
 
 
@@ -19,6 +21,11 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             return response
         finally:
             duration_ms = round((time.perf_counter() - started) * 1000, 2)
+            if request.url.path.startswith("/api/"):
+                try:
+                    await record_api_latency(duration_ms)
+                except Exception:
+                    logger.debug("failed to record api latency", exc_info=True)
             logger.info(
                 "request completed",
                 extra={

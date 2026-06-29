@@ -1,8 +1,17 @@
+from datetime import UTC, datetime, timedelta
+
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Document, DocumentStatus, ProcessingJob, ProcessingJobStatus
-from app.schemas.metrics import DocumentMetricsResponse, ProcessingMetricsResponse, StageMetrics
+from app.schemas.metrics import (
+    DocumentMetricsResponse,
+    ProcessingMetricsResponse,
+    StageMetrics,
+    SystemMetricsResponse,
+)
+from app.services.api_latency import get_api_latency_stats
+from app.services.worker_health import get_worker_queue_depth
 
 
 async def get_document_metrics(db: AsyncSession) -> DocumentMetricsResponse:
@@ -72,4 +81,37 @@ async def get_processing_metrics(db: AsyncSession) -> ProcessingMetricsResponse:
         avg_duration_ms=round(avg_duration, 2) if avg_duration else None,
         failure_rate=failure_rate,
         by_stage=sorted(stage_map.values(), key=lambda item: item.stage),
+    )
+
+
+async def get_system_metrics(db: AsyncSession) -> SystemMetricsResponse:
+    avg_api_latency_ms, api_request_samples = await get_api_latency_stats()
+    worker_queue_depth = await get_worker_queue_depth()
+
+    one_hour_ago = datetime.now(UTC) - timedelta(hours=1)
+    documents_last_hour = await db.scalar(
+        select(func.count())
+        .select_from(Document)
+        .where(Document.created_at >= one_hour_ago)
+    )
+
+    status_result = await db.execute(
+        select(Document.status, func.count()).group_by(Document.status)
+    )
+    doc_counts = {status.value: count for status, count in status_result.all()}
+    doc_total = sum(doc_counts.values())
+    doc_failed = doc_counts.get(DocumentStatus.FAILED.value, 0)
+    document_failure_rate = round(doc_failed / doc_total, 4) if doc_total else 0.0
+
+    processing = await get_processing_metrics(db)
+
+    return SystemMetricsResponse(
+        avg_api_latency_ms=avg_api_latency_ms,
+        api_request_samples=api_request_samples,
+        worker_queue_depth=worker_queue_depth,
+        documents_per_hour=int(documents_last_hour or 0),
+        document_failure_rate=document_failure_rate,
+        processing_failure_rate=processing.failure_rate,
+        avg_processing_duration_ms=processing.avg_duration_ms,
+        stage_avg_duration_ms=processing.by_stage,
     )

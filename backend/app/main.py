@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -10,6 +11,9 @@ from app.api.router import api_router
 from app.config import get_settings
 from app.logging_config import configure_logging
 from app.middleware import register_exception_handlers, register_middleware
+from app.schemas.openapi_metadata import API_DESCRIPTION, OPENAPI_TAGS
+
+logger = logging.getLogger("app.startup")
 
 
 def run_migrations() -> None:
@@ -22,8 +26,14 @@ def run_migrations() -> None:
 async def lifespan(app: FastAPI):
     settings = get_settings()
     app.state.settings = settings
-    run_migrations()
+    try:
+        run_migrations()
+    except Exception:
+        logger.exception("Database migration failed — app may be in an inconsistent state")
+        raise
+    logger.info("Application startup complete")
     yield
+    logger.info("Application shutdown")
 
 
 def create_app() -> FastAPI:
@@ -32,9 +42,12 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title="Document Vault AI",
-        description="AI-powered document management with RAG chat",
+        description=API_DESCRIPTION,
         version="0.1.0",
         lifespan=lifespan,
+        openapi_tags=OPENAPI_TAGS,
+        contact={"name": "Document Vault AI", "url": "https://github.com/document-vault-ai"},
+        license_info={"name": "MIT"},
     )
 
     app.add_middleware(
@@ -50,9 +63,19 @@ def create_app() -> FastAPI:
 
     app.include_router(api_router, prefix="/api/v1")
 
-    @app.get("/", tags=["root"])
+    @app.get(
+        "/",
+        tags=["root"],
+        summary="API entry point",
+        description="Returns API name and links to interactive OpenAPI documentation.",
+    )
     async def root() -> dict[str, str]:
-        return {"message": "Document Vault AI API", "docs": "/docs"}
+        return {
+            "message": "Document Vault AI API",
+            "docs": "/docs",
+            "openapi": "/openapi.json",
+            "api_base": "/api/v1",
+        }
 
     return app
 

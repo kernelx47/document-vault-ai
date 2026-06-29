@@ -1,6 +1,4 @@
-import logging
-
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -12,8 +10,6 @@ from app.exceptions import (
 )
 from app.middleware.request_logging import RequestLoggingMiddleware
 
-logger = logging.getLogger(__name__)
-
 
 def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(HTTPException, api_error_handler)
@@ -23,17 +19,4 @@ def register_exception_handlers(app: FastAPI) -> None:
 
 
 def register_middleware(app: FastAPI) -> None:
-    @app.middleware("http")
-    async def log_unhandled_errors(request: Request, call_next):
-        try:
-            return await call_next(request)
-        except HTTPException:
-            raise
-        except Exception:
-            logger.exception(
-                "unhandled exception",
-                extra={"method": request.method, "path": request.url.path},
-            )
-            raise
-
     app.add_middleware(RequestLoggingMiddleware)

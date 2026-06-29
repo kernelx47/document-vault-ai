@@ -17,4 +17,9 @@ celery_app.conf.update(
     timezone="UTC",
     enable_utc=True,
     imports=("app.workers.tasks",),
+    task_soft_time_limit=600,
+    task_time_limit=900,
+    task_acks_late=True,
+    task_reject_on_worker_lost=True,
+    broker_connection_retry_on_startup=True,
 )
