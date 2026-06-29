@@ -77,7 +77,7 @@ class SystemMetricsResponse(BaseModel):
         description="Per-route latency breakdown (UUID path segments normalized to `{id}`).",
     )
     worker_queue_depth: int = Field(default=0, description="Pending Celery tasks in the queue.")
-    documents_processed_per_hour: int = Field(
+    documents_per_hour: int = Field(
         default=0,
         description="Documents that finished processing (ready or failed) in the last hour.",
     )

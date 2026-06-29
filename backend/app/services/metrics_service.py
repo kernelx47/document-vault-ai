@@ -119,7 +119,7 @@ async def get_system_metrics(db: AsyncSession) -> SystemMetricsResponse:
         api_request_samples=api_request_samples,
         api_latency_by_route=api_latency_by_route,
         worker_queue_depth=worker_queue_depth,
-        documents_processed_per_hour=int(documents_processed_last_hour or 0),
+        documents_per_hour=int(documents_processed_last_hour or 0),
         document_failure_rate=document_failure_rate,
         processing_failure_rate=processing.failure_rate,
         avg_processing_duration_ms=processing.avg_duration_ms,

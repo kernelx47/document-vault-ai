@@ -76,7 +76,7 @@ def test_openapi_system_metrics_has_examples(client: TestClient):
     assert schema["examples"]
     example = schema["examples"][0]
     assert "p95_api_latency_ms" in example
-    assert "documents_processed_per_hour" in example
+    assert "documents_per_hour" in example
     assert "chat" in example
 
 

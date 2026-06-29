@@ -45,7 +45,7 @@ def test_system_metrics_endpoint(client: TestClient):
         api_request_samples=10,
         api_latency_by_route=[],
         worker_queue_depth=1,
-        documents_processed_per_hour=3,
+        documents_per_hour=3,
         document_failure_rate=0.0,
         processing_failure_rate=0.05,
         avg_processing_duration_ms=500.0,
@@ -69,5 +69,5 @@ def test_system_metrics_endpoint(client: TestClient):
     assert payload["avg_api_latency_ms"] == 25.0
     assert payload["p95_api_latency_ms"] == 80.0
     assert payload["worker_queue_depth"] == 1
-    assert payload["documents_processed_per_hour"] == 3
+    assert payload["documents_per_hour"] == 3
     assert payload["chat"]["avg_rag_duration_ms"] == 900.0

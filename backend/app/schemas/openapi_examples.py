@@ -193,7 +193,7 @@ SYSTEM_METRICS_EXAMPLE = {
         },
     ],
     "worker_queue_depth": 2,
-    "documents_processed_per_hour": 5,
+    "documents_per_hour": 5,
     "document_failure_rate": 0.0833,
     "processing_failure_rate": 0.0625,
     "avg_processing_duration_ms": 820.5,
