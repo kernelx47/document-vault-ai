@@ -1,9 +1,11 @@
+"""Chat session and messaging endpoints with RAG and streaming support."""
+
 import json
 import logging
 from collections.abc import AsyncIterator
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,7 +18,11 @@ from app.schemas.chat import (
     ChatSessionDetail,
     MultiChatSessionCreateRequest,
 )
-from app.schemas.openapi_examples import CHAT_STREAM_SSE_EXAMPLE
+from app.schemas.openapi_examples import (
+    CHAT_MESSAGE_REQUEST_EXAMPLE,
+    CHAT_STREAM_SSE_EXAMPLE,
+    MULTI_CHAT_SESSION_REQUEST_EXAMPLE,
+)
 from app.schemas.openapi_responses import (
     CHAT_MESSAGE_RESPONSES,
     CHAT_SESSION_RESPONSES,
@@ -43,7 +49,9 @@ logger = logging.getLogger("app.api.chat")
     responses=CHAT_SESSION_RESPONSES,
 )
 async def create_multi_chat_session(
-    payload: MultiChatSessionCreateRequest,
+    payload: MultiChatSessionCreateRequest = Body(
+        openapi_examples={"compare_policies": {"summary": "Compare two policies", "value": MULTI_CHAT_SESSION_REQUEST_EXAMPLE}},
+    ),
     db: AsyncSession = Depends(get_db),
 ) -> ChatSessionCreateResponse:
     return await chat_service.create_multi_chat_session(db, payload)
@@ -79,7 +87,13 @@ async def get_chat_session(
 async def send_chat_message(
     request: Request,
     session_id: UUID,
-    payload: ChatMessageRequest,
+    payload: ChatMessageRequest = Body(
+        openapi_examples={
+            "renewal_date": {"summary": "Ask about renewal date", "value": CHAT_MESSAGE_REQUEST_EXAMPLE},
+            "coverage_limits": {"summary": "Ask about coverage", "value": {"question": "What are the coverage limits?"}},
+            "summary": {"summary": "Ask for a summary", "value": {"question": "Summarize this document in 3 bullet points."}},
+        },
+    ),
     db: AsyncSession = Depends(get_db),
 ) -> ChatMessageResponse:
     client_ip = request.client.host if request.client else "unknown"
@@ -115,7 +129,12 @@ async def send_chat_message(
 async def stream_chat_message(
     request: Request,
     session_id: UUID,
-    payload: ChatMessageRequest,
+    payload: ChatMessageRequest = Body(
+        openapi_examples={
+            "renewal_date": {"summary": "Ask about renewal date", "value": CHAT_MESSAGE_REQUEST_EXAMPLE},
+            "coverage_limits": {"summary": "Ask about coverage", "value": {"question": "What are the coverage limits?"}},
+        },
+    ),
     db: AsyncSession = Depends(get_db),
 ) -> StreamingResponse:
     client_ip = request.client.host if request.client else "unknown"

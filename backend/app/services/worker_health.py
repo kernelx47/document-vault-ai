@@ -1,3 +1,5 @@
+"""Check Celery worker health and queue depth via Redis."""
+
 import asyncio
 import logging
 
@@ -9,6 +11,7 @@ logger = logging.getLogger("app.worker_health")
 
 
 async def get_worker_queue_depth() -> int:
+    """Return the number of pending tasks in the Celery broker queue."""
     settings = get_settings()
     client = Redis.from_url(settings.redis_url)
     try:
@@ -22,6 +25,7 @@ async def get_worker_queue_depth() -> int:
 
 
 async def check_worker() -> str:
+    """Ping Celery workers and return ``"ok"`` or ``"error"``."""
     def ping_workers() -> bool:
         try:
             from app.workers.celery_app import celery_app

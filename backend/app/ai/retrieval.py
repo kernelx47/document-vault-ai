@@ -1,3 +1,5 @@
+"""Vector similarity retrieval of document chunks for RAG context building."""
+
 import logging
 from dataclasses import dataclass
 from uuid import UUID
@@ -14,6 +16,8 @@ logger = logging.getLogger("app.retrieval")
 
 @dataclass
 class RetrievedChunk:
+    """A document chunk paired with its cosine similarity score."""
+
     chunk: DocumentChunk
     score: float
     document_filename: str | None = None

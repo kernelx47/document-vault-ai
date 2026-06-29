@@ -1,3 +1,5 @@
+"""Split extracted text segments into overlapping fixed-size chunks for embedding."""
+
 from dataclasses import dataclass
 
 from app.ai.extractors import TextSegment
@@ -6,12 +8,15 @@ from app.config import get_settings
 
 @dataclass
 class TextChunk:
+    """A single text chunk with positional metadata for vector storage."""
+
     content: str
     page_number: int | None
     chunk_index: int
 
 
 def chunk_segments(segments: list[TextSegment]) -> list[TextChunk]:
+    """Partition text segments into overlapping chunks using configured size and overlap."""
     settings = get_settings()
     chunk_size = settings.chunk_size
     overlap = settings.chunk_overlap

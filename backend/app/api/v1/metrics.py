@@ -1,3 +1,5 @@
+"""Operational metrics endpoints: documents, processing, storage, AI usage, and time series."""
+
 import logging
 
 from fastapi import APIRouter, Depends, Query
@@ -7,6 +9,7 @@ from app.dependencies import get_db
 from app.schemas.metrics import (
     AIUsageMetricsResponse,
     DocumentMetricsResponse,
+    MetricsTimeseriesResponse,
     ProcessingHistoryResponse,
     ProcessingMetricsResponse,
     StorageMetricsResponse,
@@ -106,3 +109,20 @@ async def system_metrics(db: AsyncSession = Depends(get_db)) -> SystemMetricsRes
 async def ai_usage_metrics() -> AIUsageMetricsResponse:
     data = await get_ai_usage_metrics()
     return AIUsageMetricsResponse(**data)
+
+
+@router.get(
+    "/timeseries",
+    response_model=MetricsTimeseriesResponse,
+    summary="Metrics time series",
+    response_description="Hourly AI usage, recent API latency samples, and processing job buckets.",
+    description=(
+        "Time-bucketed metrics for dashboard sparklines and trend charts. "
+        "AI usage is grouped by hour; API latency returns the most recent samples oldest-first."
+    ),
+)
+async def metrics_timeseries(
+    hours: int = Query(default=24, ge=1, le=168, description="Lookback window in hours."),
+    db: AsyncSession = Depends(get_db),
+) -> MetricsTimeseriesResponse:
+    return await metrics_service.get_metrics_timeseries(db, hours=hours)

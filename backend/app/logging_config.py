@@ -1,3 +1,5 @@
+"""Structured JSON logging configuration."""
+
 import json
 import logging
 import sys
@@ -6,6 +8,8 @@ from typing import Any
 
 
 class JsonFormatter(logging.Formatter):
+    """Logging formatter that emits structured JSON lines."""
+
     def format(self, record: logging.LogRecord) -> str:
         payload: dict[str, Any] = {
             "timestamp": datetime.fromtimestamp(record.created, tz=UTC).isoformat(),

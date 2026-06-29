@@ -1,3 +1,5 @@
+"""RAG retrieval, citation mapping, and answer generation."""
+
 import logging
 import re
 from dataclasses import dataclass
@@ -5,7 +7,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai.langchain_rag import contextualize_question, generate_answer, stream_answer
+from app.ai.langchain_rag import contextualize_question, generate_answer
 from app.ai.retrieval import (
     RetrievedChunk,
     build_context_blocks,
@@ -38,6 +40,7 @@ __all__ = [
 
 @dataclass(frozen=True)
 class CitationValidationResult:
+    """Result of stripping invalid [Source N] markers from an answer."""
     answer: str
     invalid_indices: list[int]
 
@@ -89,6 +92,7 @@ def to_citations(
     *,
     source_indices: list[int] | None = None,
 ) -> list[Citation]:
+    """Convert retrieved chunks into Citation schema objects."""
     citations: list[Citation] = []
     for position, item in enumerate(retrieved):
         excerpt = item.chunk.content
@@ -182,6 +186,7 @@ async def generate_rag_answer(
     *,
     retrieved: list[RetrievedChunk] | None = None,
 ) -> tuple[str, list[Citation], list[UUID]]:
+    """Retrieve context (if needed), generate an answer, and validate citations."""
     chunks = retrieved
     if chunks is None:
         chunks = await retrieve_for_question(db, document_ids, question, history_messages)
@@ -195,6 +200,7 @@ async def prepare_rag_prompt(
     question: str,
     history_messages: list[ChatMessage],
 ) -> tuple[list[RetrievedChunk], str, str, list[Citation], list[UUID]]:
+    """Build the full RAG prompt and citations without calling the LLM."""
     from app.ai.prompts import build_chat_prompt
 
     retrieved = await retrieve_for_question(db, document_ids, question, history_messages)

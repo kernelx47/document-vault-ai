@@ -1,3 +1,5 @@
+"""Celery task definitions for asynchronous document processing."""
+
 import logging
 import uuid
 
@@ -23,6 +25,7 @@ def ping() -> str:
     retry_backoff_max=60,
 )
 def process_document_task(self, document_id: str) -> str:
+    """Run the ingestion pipeline for a single document with automatic retries."""
     try:
         doc_uuid = uuid.UUID(document_id)
     except ValueError:

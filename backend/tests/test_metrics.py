@@ -68,3 +68,13 @@ def test_processing_history_empty(client: TestClient):
     assert payload["total"] >= 0
     assert payload["limit"] == 50
     assert payload["offset"] == 0
+
+
+def test_metrics_timeseries_empty(client: TestClient):
+    response = client.get("/api/v1/metrics/timeseries")
+    assert response.status_code == 200
+    payload = response.json()
+    assert set(payload.keys()) >= {"ai_usage", "api_latency_ms", "processing_jobs"}
+    assert isinstance(payload["ai_usage"], list)
+    assert isinstance(payload["api_latency_ms"], list)
+    assert isinstance(payload["processing_jobs"], list)

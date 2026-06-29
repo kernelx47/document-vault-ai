@@ -1,3 +1,5 @@
+"""Redis-backed rate limiting and daily AI quota enforcement."""
+
 import logging
 from datetime import UTC, datetime
 
@@ -19,6 +21,7 @@ async def _increment_rate_limit(redis: Redis, key: str, ttl_seconds: int, limit:
 
 
 async def enforce_upload_rate_limit(client_ip: str) -> None:
+    """Raise 429 if the client exceeds the per-minute upload limit."""
     settings = get_settings()
     if settings.upload_rate_limit_per_minute <= 0:
         return
@@ -50,6 +53,7 @@ async def enforce_upload_rate_limit(client_ip: str) -> None:
 
 
 async def enforce_chat_rate_limit(client_ip: str) -> None:
+    """Raise 429 if the client exceeds the per-minute chat limit."""
     settings = get_settings()
     if settings.chat_rate_limit_per_minute <= 0:
         return
@@ -81,6 +85,7 @@ async def enforce_chat_rate_limit(client_ip: str) -> None:
 
 
 async def enforce_daily_ai_quota() -> None:
+    """Raise 429 if the daily AI request quota has been exhausted."""
     settings = get_settings()
     if settings.daily_ai_request_quota <= 0:
         return

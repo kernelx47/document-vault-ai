@@ -1,3 +1,5 @@
+"""Cross-document comparison using LLM-generated structured analysis."""
+
 import uuid
 
 from fastapi import HTTPException, status
@@ -16,6 +18,7 @@ from app.schemas.document_analysis import (
 async def compare_document_set(
     db: AsyncSession, payload: DocumentCompareRequest
 ) -> DocumentCompareResponse:
+    """Generate a structured comparison across multiple documents."""
     unique_ids = list(dict.fromkeys(payload.document_ids))
     result = await db.execute(select(Document).where(Document.id.in_(unique_ids)))
     documents = {document.id: document for document in result.scalars().all()}

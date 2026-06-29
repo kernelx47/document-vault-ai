@@ -59,7 +59,7 @@ function HealthBadge({ label, ok }: { label: string; ok: boolean }) {
     <span
       className={clsx(
         "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold",
-        ok ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+        ok ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600",
       )}
     >
       <span className={clsx("h-1.5 w-1.5 rounded-full", ok ? "bg-emerald-500" : "bg-amber-500")} />

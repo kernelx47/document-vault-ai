@@ -1,3 +1,5 @@
+"""SQLAlchemy model for document processing pipeline jobs."""
+
 import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
@@ -14,6 +16,8 @@ if TYPE_CHECKING:
 
 
 class ProcessingJob(Base):
+    """A single stage execution record within the document processing pipeline."""
+
     __tablename__ = "processing_jobs"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)

@@ -1,3 +1,5 @@
+"""FastAPI dependency providers for database sessions and shared resources."""
+
 from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession

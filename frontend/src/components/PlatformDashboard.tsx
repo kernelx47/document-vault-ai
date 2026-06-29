@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import clsx from "clsx";
+import { BrandLogo } from "@/components/BrandLogo";
 import {
   Activity,
   ArrowLeft,
-  BarChart3,
   Cpu,
   Database,
   Download,
@@ -41,13 +41,13 @@ const NAV_ITEMS: { id: PlatformSection; label: string; icon: typeof Gauge; descr
   { id: "system", label: "System", icon: Activity, description: "Performance" },
 ];
 
-const SECTION_META: Record<PlatformSection, { title: string; breadcrumb: string }> = {
-  overview: { title: "Overview", breadcrumb: "Dashboard" },
-  usage: { title: "Usage", breadcrumb: "AI Usage" },
-  documents: { title: "Documents", breadcrumb: "Document Stats" },
-  processing: { title: "Processing", breadcrumb: "Pipeline Metrics" },
-  storage: { title: "Storage", breadcrumb: "Data Storage" },
-  system: { title: "System", breadcrumb: "Performance" },
+const SECTION_META: Record<PlatformSection, { title: string; description: string }> = {
+  overview: { title: "Overview", description: "High-level platform summary" },
+  usage: { title: "Usage", description: "AI tokens, requests, and cost" },
+  documents: { title: "Documents", description: "Vault inventory and status" },
+  processing: { title: "Processing", description: "Ingestion pipeline metrics" },
+  storage: { title: "Storage", description: "Files, chunks, and footprint" },
+  system: { title: "System", description: "API latency and RAG health" },
 };
 
 export default function PlatformDashboard() {
@@ -84,119 +84,108 @@ export default function PlatformDashboard() {
   const meta = SECTION_META[section];
 
   return (
-    <div className="admin-shell flex h-screen w-screen overflow-hidden" data-theme={mounted ? theme : "light"}>
-      <aside className="admin-sidebar relative flex w-[260px] shrink-0 flex-col overflow-hidden">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(124,58,237,0.18),transparent_55%)]" />
-
-        <div className="relative border-b border-white/10 px-5 py-5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-violet-700 shadow-lg shadow-violet-900/40">
-              <BarChart3 className="h-5 w-5 text-white" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-white">Admin Console</p>
-              <p className="text-[11px] text-violet-200/70">VaultMind</p>
-            </div>
+    <div
+      className="admin-shell flex h-screen w-screen overflow-hidden"
+      data-theme={mounted ? theme : "light"}
+    >
+      <aside className="admin-sidebar flex w-[260px] shrink-0 flex-col overflow-hidden">
+        <div className="flex items-center gap-2.5 border-b border-[var(--admin-border)] px-4 py-4">
+          <BrandLogo size={36} />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-[var(--admin-text)]">VaultMind</p>
+            <p className="text-[11px] text-[var(--admin-subtle)]">Insights</p>
           </div>
         </div>
 
-        <nav className="relative flex-1 overflow-y-auto px-3 py-4">
-          <p className="px-3 pb-2 text-[10px] font-bold uppercase tracking-[0.12em] text-violet-300/50">Analytics</p>
+        <nav className="flex-1 overflow-y-auto px-2 py-3">
+          <p className="px-3 pb-1 text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--admin-subtle)]">
+            Analytics
+          </p>
           {NAV_ITEMS.map(({ id, label, icon: Icon, description }) => (
             <button
               key={id}
               type="button"
               onClick={() => setSection(id)}
               className={clsx(
-                "group mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all duration-200",
+                "mb-0.5 flex w-full items-center gap-2.5 rounded-[var(--radius)] px-3 py-2 text-left transition-colors",
                 section === id
-                  ? "bg-white/10 text-white shadow-inner shadow-white/5 ring-1 ring-white/10"
-                  : "text-violet-100/70 hover:bg-white/5 hover:text-white",
+                  ? "bg-[var(--admin-nav-active)] text-[var(--admin-text)]"
+                  : "text-[var(--admin-muted)] hover:bg-[var(--admin-nav-hover)] hover:text-[var(--admin-text)]",
               )}
             >
-              <div
-                className={clsx(
-                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors",
-                  section === id ? "bg-violet-500/30 text-violet-100" : "bg-white/5 text-violet-200/60 group-hover:bg-white/10",
-                )}
-              >
-                <Icon className="h-4 w-4" />
-              </div>
+              <Icon className="h-[18px] w-[18px] shrink-0 opacity-70" />
               <div className="min-w-0">
-                <p className="text-[13px] font-medium leading-tight">{label}</p>
-                <p className="truncate text-[10px] text-violet-200/45">{description}</p>
+                <p className="truncate text-[14px] leading-tight">{label}</p>
+                <p className="truncate text-[11px] text-[var(--admin-subtle)]">{description}</p>
               </div>
             </button>
           ))}
         </nav>
 
-        <div className="relative space-y-1 border-t border-white/10 p-3">
+        <div className="space-y-0.5 border-t border-[var(--admin-border)] px-3 py-3">
           <button
             type="button"
             onClick={toggleTheme}
-            className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-[13px] text-violet-100/70 transition-colors hover:bg-white/5 hover:text-white"
+            className="flex w-full items-center gap-2 rounded-[var(--radius)] px-3 py-2 text-[14px] text-[var(--admin-muted)] transition-colors hover:bg-[var(--admin-nav-hover)] hover:text-[var(--admin-text)]"
           >
-            {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            {theme === "dark" ? <Sun className="h-[18px] w-[18px]" /> : <Moon className="h-[18px] w-[18px]" />}
             {theme === "dark" ? "Light mode" : "Dark mode"}
           </button>
           <Link
             href="/"
-            className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-[13px] text-violet-100/70 transition-colors hover:bg-white/5 hover:text-white"
+            className="flex items-center gap-2 rounded-[var(--radius)] px-3 py-2 text-[14px] text-[var(--admin-muted)] transition-colors hover:bg-[var(--admin-nav-hover)] hover:text-[var(--admin-text)]"
           >
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowLeft className="h-[18px] w-[18px]" />
             Back to chat
           </Link>
         </div>
       </aside>
 
-      <main className="admin-main relative flex min-w-0 flex-1 flex-col">
-        <div className="pointer-events-none absolute inset-0 admin-grid-bg opacity-60" />
-
-        <header className="relative z-10 flex h-16 shrink-0 items-center justify-between border-b border-[var(--admin-border)] bg-[var(--admin-header)] px-8 backdrop-blur-xl">
-          <div>
-            <div className="flex items-center gap-2 text-xs text-[var(--admin-muted)]">
-              <span>Platform</span>
-              <span>/</span>
-              <span className="font-medium">{meta.breadcrumb}</span>
-            </div>
-            <div className="mt-0.5 flex items-center gap-3">
-              <h2 className="text-lg font-semibold text-[var(--admin-text)]">{meta.title}</h2>
-              <span className="admin-live-pulse inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                Live
-              </span>
-            </div>
+      <main className="admin-main flex min-w-0 flex-1 flex-col">
+        <header className="admin-header flex h-14 shrink-0 items-center justify-between gap-4 px-6">
+          <div className="min-w-0">
+            <h1
+              className="truncate text-[15px] font-semibold tracking-[-0.01em] text-[var(--admin-text)]"
+              style={{ fontFamily: "'Source Serif 4', serif" }}
+            >
+              {meta.title}
+            </h1>
+            <p className="mt-0.5 truncate text-xs text-[var(--admin-subtle)]">{meta.description}</p>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex shrink-0 items-center gap-2">
+            <span className="admin-live-pulse hidden items-center gap-1.5 rounded-full bg-[var(--admin-nav-active)] px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide text-[var(--admin-muted)] sm:inline-flex">
+              <span className="h-1.5 w-1.5 rounded-full bg-[var(--success)]" />
+              Live
+            </span>
             {lastUpdated && (
-              <p className="hidden text-[11px] text-[var(--admin-muted)] lg:block">
-                Updated {lastUpdated.toLocaleTimeString()} · auto 30s
+              <p className="hidden text-[11px] text-[var(--admin-subtle)] xl:block">
+                {lastUpdated.toLocaleTimeString()}
               </p>
             )}
             {data && (
               <button
                 type="button"
                 onClick={() => exportPlatformSnapshotCsv(data)}
-                className="hidden items-center gap-2 rounded-xl border border-[var(--admin-border)] bg-[var(--admin-card)] px-3 py-2 text-xs font-semibold text-[var(--admin-muted)] shadow-sm transition-all hover:border-violet-400 hover:text-violet-600 sm:flex"
+                className="admin-btn hidden items-center gap-1.5 rounded-[var(--radius)] px-3 py-1.5 text-xs font-medium sm:flex"
               >
                 <Download className="h-3.5 w-3.5" />
-                Export snapshot
+                Export
               </button>
             )}
             <button
               type="button"
               onClick={toggleTheme}
-              className="flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--admin-border)] bg-[var(--admin-card)] text-[var(--admin-muted)] transition-all hover:border-violet-400 hover:text-violet-600 lg:hidden"
-              title="Toggle theme"
+              className="admin-btn flex h-8 w-8 items-center justify-center rounded-[var(--radius)] lg:hidden"
+              title={theme === "dark" ? "Light mode" : "Dark mode"}
             >
-              {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              {theme === "dark" ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
             </button>
             <button
               type="button"
               onClick={() => void loadMetrics(true)}
               disabled={refreshing}
-              className="flex items-center gap-2 rounded-xl border border-[var(--admin-border)] bg-[var(--admin-card)] px-4 py-2 text-xs font-semibold text-[var(--admin-muted)] shadow-sm transition-all hover:border-violet-400 hover:text-violet-700 hover:shadow-md disabled:opacity-60"
+              className="admin-btn flex items-center gap-1.5 rounded-[var(--radius)] px-3 py-1.5 text-xs font-medium disabled:opacity-60"
             >
               {refreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
               Refresh
@@ -204,22 +193,19 @@ export default function PlatformDashboard() {
           </div>
         </header>
 
-        <div className="relative z-10 flex-1 overflow-y-auto px-8 py-8">
+        <div className="flex-1 overflow-y-auto px-6 py-6">
           {loading && !data ? (
-            <div className="flex h-full flex-col items-center justify-center gap-4">
-              <div className="relative">
-                <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-violet-500 to-violet-700 opacity-20" />
-                <Loader2 className="absolute inset-0 m-auto h-7 w-7 animate-spin text-violet-600" />
-              </div>
-              <p className="text-sm font-medium text-[var(--admin-muted)]">Loading analytics…</p>
+            <div className="flex h-full flex-col items-center justify-center gap-3">
+              <Loader2 className="h-7 w-7 animate-spin text-[var(--electric-violet)]" />
+              <p className="text-sm text-[var(--admin-subtle)]">Loading analytics…</p>
             </div>
           ) : error && !data ? (
-            <div className="mx-auto max-w-md rounded-2xl border border-red-200 bg-[var(--admin-card)] p-8 text-center shadow-xl">
+            <div className="mx-auto max-w-md rounded-[var(--radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-card)] p-8 text-center">
               <p className="text-sm text-[var(--danger)]">{error}</p>
               <button
                 type="button"
                 onClick={() => void loadMetrics()}
-                className="mt-4 rounded-xl bg-gradient-to-r from-violet-600 to-violet-700 px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-violet-500/25"
+                className="mt-4 rounded-[var(--radius)] bg-[var(--electric-violet)] px-5 py-2 text-sm font-medium text-white hover:opacity-90"
               >
                 Retry
               </button>
@@ -227,7 +213,7 @@ export default function PlatformDashboard() {
           ) : data ? (
             <div className="admin-content-enter mx-auto max-w-[1400px]">
               {error && (
-                <p className="mb-6 rounded-xl border border-red-200 bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-400">
+                <p className="mb-6 rounded-[var(--radius)] border border-red-200 bg-[var(--danger-bg)] px-4 py-3 text-sm text-[var(--danger)]">
                   Refresh failed: {error}
                 </p>
               )}

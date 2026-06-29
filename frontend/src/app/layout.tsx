@@ -4,6 +4,9 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "VaultMind — Your Documents, Decoded",
   description: "AI-powered document intelligence. Upload, search, and get instant answers from every page.",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({

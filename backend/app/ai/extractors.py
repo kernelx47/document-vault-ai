@@ -1,3 +1,5 @@
+"""Document text extraction for PDF and DOCX file formats."""
+
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -7,11 +9,14 @@ logger = logging.getLogger("app.extractors")
 
 @dataclass
 class TextSegment:
+    """A contiguous block of text extracted from a document page or section."""
+
     text: str
     page_number: int | None = None
 
 
 def extract_text(file_path: str, content_type: str) -> tuple[list[TextSegment], int]:
+    """Dispatch extraction to the appropriate handler based on MIME type."""
     path = Path(file_path)
     if not path.exists():
         raise FileNotFoundError(f"Document file not found: {path.name}")

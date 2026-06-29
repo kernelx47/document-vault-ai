@@ -124,56 +124,80 @@ body {
   background-color: var(--iris-haze);
 }
 
-/* ── Admin platform dashboard ─────────────────────────────────── */
+/* ── Platform dashboard ───────────────────────────────────────── */
 
 .admin-shell {
-  --admin-bg: #f1f2f9;
-  --admin-surface: rgba(241, 242, 249, 0.8);
-  --admin-card: rgba(255, 255, 255, 0.82);
-  --admin-border: rgba(231, 230, 244, 0.95);
-  --admin-text: #281950;
-  --admin-muted: #676b89;
-  --admin-header: rgba(255, 255, 255, 0.72);
+  --admin-bg: var(--iris-haze);
+  --admin-sidebar: var(--pure-paper);
+  --admin-surface: var(--iris-haze);
+  --admin-card: var(--pure-paper);
+  --admin-border: var(--lavender-mist);
+  --admin-text: var(--deep-ink);
+  --admin-muted: var(--overcast);
+  --admin-subtle: var(--mist);
+  --admin-header: var(--pure-paper);
+  --admin-nav-hover: var(--iris-haze);
+  --admin-nav-active: var(--iris-haze);
   background: var(--admin-bg);
+  color: var(--admin-text);
 }
 
 .admin-shell[data-theme="dark"] {
-  --admin-bg: #0f0a1a;
-  --admin-surface: rgba(25, 16, 52, 0.65);
-  --admin-card: rgba(30, 22, 56, 0.88);
+  --admin-bg: #141024;
+  --admin-sidebar: #191034;
+  --admin-surface: #221a3d;
+  --admin-card: #1e1638;
   --admin-border: rgba(124, 58, 237, 0.14);
   --admin-text: #f1f2f9;
   --admin-muted: #a39ac1;
-  --admin-header: rgba(25, 16, 52, 0.82);
+  --admin-subtle: #676b89;
+  --admin-header: #191034;
+  --admin-nav-hover: rgba(255, 255, 255, 0.05);
+  --admin-nav-active: rgba(124, 58, 237, 0.14);
 }
 
 .admin-sidebar {
-  background: linear-gradient(180deg, #191034 0%, #1e1638 50%, #191034 100%);
+  background: var(--admin-sidebar);
+  border-right: 1px solid var(--admin-border);
 }
 
 .admin-main {
-  background:
-    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(124, 58, 237, 0.08), transparent),
-    linear-gradient(180deg, #f8f9fc 0%, var(--admin-bg) 100%);
+  background: var(--admin-bg);
 }
 
-.admin-shell[data-theme="dark"] .admin-main {
-  background:
-    radial-gradient(ellipse 80% 40% at 50% -10%, rgba(124, 58, 237, 0.12), transparent),
-    linear-gradient(180deg, #120b22 0%, var(--admin-bg) 100%);
+.admin-header {
+  background: var(--admin-header);
+  border-bottom: 1px solid var(--admin-border);
 }
 
-.admin-grid-bg {
-  background-image:
-    linear-gradient(rgba(124, 58, 237, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(124, 58, 237, 0.03) 1px, transparent 1px);
-  background-size: 32px 32px;
+.admin-btn {
+  border: 1px solid var(--admin-border);
+  background: var(--admin-card);
+  color: var(--admin-muted);
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
-.admin-shell[data-theme="dark"] .admin-grid-bg {
-  background-image:
-    linear-gradient(rgba(124, 58, 237, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(124, 58, 237, 0.06) 1px, transparent 1px);
+.admin-btn:hover:not(:disabled) {
+  background: var(--admin-nav-hover);
+  color: var(--admin-text);
+  border-color: rgba(124, 58, 237, 0.25);
+}
+
+.admin-shell[data-theme="dark"] .recharts-cartesian-grid-horizontal line,
+.admin-shell[data-theme="dark"] .recharts-cartesian-grid-vertical line {
+  stroke: rgba(124, 58, 237, 0.12);
+}
+
+.admin-shell[data-theme="dark"] .recharts-text {
+  fill: #a39ac1;
+}
+
+.admin-shell[data-theme="dark"] .admin-chart-card:hover {
+  border-color: rgba(167, 139, 250, 0.28);
+}
+
+.admin-shell[data-theme="dark"] .admin-stat-card:hover {
+  box-shadow: 0 12px 40px rgb(0 0 0 / 25%);
 }
 
 .admin-stat-card {
@@ -192,19 +216,6 @@ body {
 .admin-chart-card:hover {
   box-shadow: 0 12px 40px rgb(40 25 80 / 7%);
   border-color: rgba(124, 58, 237, 0.15);
-}
-
-.admin-shell[data-theme="dark"] .admin-chart-card:hover {
-  border-color: rgba(167, 139, 250, 0.28);
-}
-
-.admin-shell[data-theme="dark"] .recharts-cartesian-grid-horizontal line,
-.admin-shell[data-theme="dark"] .recharts-cartesian-grid-vertical line {
-  stroke: rgba(124, 58, 237, 0.12);
-}
-
-.admin-shell[data-theme="dark"] .recharts-text {
-  fill: #a39ac1;
 }
 
 .admin-live-pulse span:first-child {

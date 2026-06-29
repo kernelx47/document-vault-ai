@@ -1,8 +1,9 @@
+"""SQLAlchemy model for the many-to-many link between chat sessions and documents."""
+
 import uuid
-from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, func
+from sqlalchemy import ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -14,6 +15,8 @@ if TYPE_CHECKING:
 
 
 class ChatSessionDocument(Base):
+    """Association table linking a chat session to its participating documents."""
+
     __tablename__ = "chat_session_documents"
 
     session_id: Mapped[uuid.UUID] = mapped_column(

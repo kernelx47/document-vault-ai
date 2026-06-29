@@ -1,3 +1,5 @@
+"""FastAPI application factory and startup lifecycle."""
+
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path

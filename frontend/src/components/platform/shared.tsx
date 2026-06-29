@@ -107,11 +107,11 @@ export function StatCard({
   sparklineColor?: string;
 }) {
   const gradients = {
-    violet: "from-violet-500/15 to-violet-600/5 border-violet-200/60 dark:from-violet-500/20 dark:to-violet-900/10 dark:border-violet-500/20",
-    green: "from-emerald-500/15 to-emerald-600/5 border-emerald-200/60 dark:from-emerald-500/20 dark:to-emerald-900/10 dark:border-emerald-500/20",
-    amber: "from-amber-500/15 to-amber-600/5 border-amber-200/60 dark:from-amber-500/20 dark:to-amber-900/10 dark:border-amber-500/20",
-    cyan: "from-cyan-500/15 to-cyan-600/5 border-cyan-200/60 dark:from-cyan-500/20 dark:to-cyan-900/10 dark:border-cyan-500/20",
-    rose: "from-rose-500/15 to-rose-600/5 border-rose-200/60 dark:from-rose-500/20 dark:to-rose-900/10 dark:border-rose-500/20",
+    violet: "from-violet-500/10 to-violet-600/5 border-violet-200/60",
+    green: "from-emerald-500/10 to-emerald-600/5 border-emerald-200/60",
+    amber: "from-amber-500/10 to-amber-600/5 border-amber-200/60",
+    cyan: "from-cyan-500/10 to-cyan-600/5 border-cyan-200/60",
+    rose: "from-rose-500/10 to-rose-600/5 border-rose-200/60",
   };
 
   const iconColors = {

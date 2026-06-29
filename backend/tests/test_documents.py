@@ -70,3 +70,35 @@ def test_batch_upload_returns_partial_failures(mock_delay, client):
 def test_batch_upload_rejects_empty_list(client):
     response = client.post("/api/v1/documents/upload/batch", files=[])
     assert response.status_code == 422
+
+
+@patch("app.services.document_service.process_document_task.delay")
+def test_batch_upload_creates_batch_with_id(mock_delay, client):
+    pdf_bytes = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n"
+    response = client.post(
+        "/api/v1/documents/upload/batch",
+        files=[("files", ("x.pdf", io.BytesIO(pdf_bytes), "application/pdf"))],
+    )
+    assert response.status_code == 202
+    payload = response.json()
+    assert payload["batch_id"] is not None
+
+    batch_resp = client.get(f"/api/v1/documents/batches/{payload['batch_id']}")
+    assert batch_resp.status_code == 200
+    batch = batch_resp.json()
+    assert batch["total_files"] == 1
+    assert len(batch["documents"]) == 1
+
+
+def test_list_batches_returns_paginated(client):
+    response = client.get("/api/v1/documents/batches")
+    assert response.status_code == 200
+    payload = response.json()
+    assert "items" in payload
+    assert "total" in payload
+    assert isinstance(payload["items"], list)
+
+
+def test_get_batch_not_found(client):
+    response = client.get("/api/v1/documents/batches/00000000-0000-0000-0000-000000000000")
+    assert response.status_code == 404

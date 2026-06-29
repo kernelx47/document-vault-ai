@@ -22,6 +22,7 @@ import {
   SummaryTone,
   uploadDocument,
 } from "@/lib/api";
+import { BrandAvatar, BrandLogo, BrandWordmark } from "@/components/BrandLogo";
 
 /* ─── Icons (1.5px stroke, violet family) ────────────────────── */
 
@@ -115,43 +116,6 @@ function IconUpload({ className }: { className?: string }) {
   );
 }
 
-function BrandLogo({ size = 22 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <linearGradient id="vaultGrad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#7c3aed" />
-          <stop offset="1" stopColor="#a855f7" />
-        </linearGradient>
-        <linearGradient id="sparkGrad" x1="16" y1="4" x2="16" y2="28" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#c4b5fd" />
-          <stop offset="1" stopColor="#ffffff" />
-        </linearGradient>
-      </defs>
-      <rect x="2" y="2" width="28" height="28" rx="8" fill="url(#vaultGrad)" />
-      <path d="M16 7L16 11M16 21L16 25M7 16H11M21 16H25" stroke="url(#sparkGrad)" strokeWidth="1.5" strokeLinecap="round" opacity="0.5" />
-      <path d="M10 13.5C10 11.015 12.686 9 16 9s6 2.015 6 4.5V17c0 .552-.448 1-1 1H11c-.552 0-1-.448-1-1v-3.5z" fill="white" fillOpacity="0.9" />
-      <rect x="14.5" y="13" width="3" height="3.5" rx="1.5" fill="url(#vaultGrad)" />
-      <path d="M16 15.5V17" stroke="url(#vaultGrad)" strokeWidth="1.2" strokeLinecap="round" />
-      <path d="M11 18h10v2.5a2.5 2.5 0 01-2.5 2.5h-5A2.5 2.5 0 0111 20.5V18z" fill="white" fillOpacity="0.25" />
-      <circle cx="24" cy="8" r="3" fill="#facc15" />
-      <path d="M24 6.5v1.5h1.5" stroke="#a16207" strokeWidth="0.8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function AiAvatar() {
-  return (
-    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[var(--electric-violet)] to-purple-500 shadow-sm shadow-purple-300/40">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-        <path d="M12 3l-1.5 4.5L6 9l4.5 1.5L12 15l1.5-4.5L18 9l-4.5-1.5L12 3z" fill="white" />
-        <path d="M6 16l-1 3 3-1 2.5-2.5L8.5 13.5 6 16z" fill="white" opacity="0.6" />
-        <path d="M18 16l1 3-3-1-2.5-2.5 2-2L18 16z" fill="white" opacity="0.6" />
-      </svg>
-    </div>
-  );
-}
-
 const THINKING_STAGES = [
   { text: "Searching documents", icon: "🔍" },
   { text: "Finding relevant passages", icon: "📄" },
@@ -210,7 +174,7 @@ function ThinkingIndicator() {
   const stage = useThinkingStage(true);
   return (
     <div className="flex items-start gap-3 mb-6">
-      <div className="mt-1"><AiAvatar /></div>
+      <div className="mt-1"><BrandAvatar size={28} /></div>
       <div className="pt-1">
         <div className="flex items-center gap-2.5 rounded-2xl bg-[var(--iris-haze)] px-4 py-2.5">
           <span className="text-sm">{stage.icon}</span>
@@ -426,7 +390,6 @@ export default function VaultApp() {
   const [compareFocus, setCompareFocus] = useState("");
   const [comparing, setComparing] = useState(false);
   const [compareResult, setCompareResult] = useState<DocumentCompareResult | null>(null);
-
   const chatEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -450,7 +413,7 @@ export default function VaultApp() {
   }, [question]);
 
   const refreshDocuments = useCallback(async () => {
-    try { setDocuments((await listDocuments()).items); } catch { /* retry */ }
+    try { setDocuments((await listDocuments("ready")).items); } catch { /* retry */ }
   }, []);
 
   useEffect(() => {
@@ -916,18 +879,22 @@ export default function VaultApp() {
 
           {/* Bottom */}
           <div className="space-y-0.5 border-t border-[var(--lavender-mist)] px-3 py-3">
-            <button
-              onClick={() => setShowUploadModal(true)}
-              className="flex w-full items-center gap-2 rounded-[var(--radius)] px-3 py-2 text-[14px] text-[var(--heather)] transition-colors hover:bg-[var(--iris-haze)]"
+            <Link
+              href="/upload"
+              className="flex w-full items-center gap-2 rounded-[var(--radius)] px-3 py-2 text-[14px] text-[var(--heather)] transition-colors hover:bg-[var(--iris-haze)] hover:text-[var(--deep-ink)]"
             >
-              <IconFile />
-              <span className="flex-1 text-left">Documents</span>
+              <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+              <span className="flex-1 text-left">Doc Uploader</span>
               {readyDocs.length > 0 && (
                 <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[var(--electric-violet)] px-1.5 text-[11px] font-medium text-white">
                   {readyDocs.length}
                 </span>
               )}
-            </button>
+            </Link>
             <Link
               href="/platform"
               className="flex w-full items-center gap-2 rounded-[var(--radius)] px-3 py-2 text-[14px] text-[var(--heather)] transition-colors hover:bg-[var(--iris-haze)] hover:text-[var(--deep-ink)]"
@@ -937,6 +904,15 @@ export default function VaultApp() {
                 <path d="M7 14l4-4 4 4 5-6" />
               </svg>
               <span className="flex-1 text-left">Insights dashboard</span>
+            </Link>
+            <Link
+              href="/activity"
+              className="flex w-full items-center gap-2 rounded-[var(--radius)] px-3 py-2 text-[14px] text-[var(--heather)] transition-colors hover:bg-[var(--iris-haze)] hover:text-[var(--deep-ink)]"
+            >
+              <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+              </svg>
+              <span className="flex-1 text-left">Activity Monitor</span>
             </Link>
           </div>
         </div>
@@ -958,11 +934,9 @@ export default function VaultApp() {
             </>
           )}
           <div className="flex-1" />
-          <div className="flex items-center gap-2">
-            <BrandLogo size={24} />
-            <span className="font-semibold tracking-[-0.02em] text-[var(--deep-ink)]" style={{ fontFamily: "'Source Serif 4', serif" }}>
-              Vault<span className="bg-gradient-to-r from-[var(--electric-violet)] to-purple-500 bg-clip-text text-transparent">Mind</span>
-            </span>
+          <div className="flex items-center gap-2.5">
+            <BrandLogo size={28} />
+            <BrandWordmark />
           </div>
           <div className="flex-1" />
           {readyDocs.length > 0 && (
@@ -973,12 +947,12 @@ export default function VaultApp() {
         {/* Content */}
         {!activeSession && !sending ? (
           <div className="flex flex-1 flex-col items-center justify-center px-4 pb-40">
-            <div className="mb-4 flex items-center justify-center"><BrandLogo size={40} /></div>
+            <div className="mb-4 flex items-center justify-center"><BrandLogo size={48} /></div>
             <h1 className="mb-2 text-[28px] font-medium tracking-[-0.03em] text-[var(--deep-ink)]" style={{ fontFamily: "'Source Serif 4', serif" }}>
               Your documents, <span className="bg-gradient-to-r from-[var(--electric-violet)] to-purple-500 bg-clip-text text-transparent">decoded</span>.
             </h1>
             <p className="mb-8 text-[15px] text-[var(--overcast)]">
-              Ask a question &mdash; get answers backed by every page
+              Ask a question, get answers backed by every page
             </p>
             <div className="w-full max-w-[640px]">
               {inputBox(true)}
@@ -993,7 +967,7 @@ export default function VaultApp() {
             <div className="flex-1 overflow-y-auto">
               {activeSession.messages.length === 0 && !sending ? (
                 <div className="flex h-full flex-col items-center justify-center pb-40">
-                  <div className="mb-3 flex items-center justify-center"><BrandLogo size={36} /></div>
+                  <div className="mb-3 flex items-center justify-center"><BrandLogo size={44} /></div>
                   <h2 className="text-[28px] font-medium tracking-[-0.03em] text-[var(--deep-ink)]" style={{ fontFamily: "'Source Serif 4', serif" }}>
                     Ready when you are.
                   </h2>
@@ -1015,7 +989,7 @@ export default function VaultApp() {
                           </div>
                         ) : (
                           <div className="flex gap-3">
-                            <div className="mt-1"><AiAvatar /></div>
+                            <div className="mt-1"><BrandAvatar size={28} /></div>
                             <div className="min-w-0 flex-1 pt-1">
                               <AssistantMessageBody
                                 messageId={msg.id}
@@ -1050,7 +1024,7 @@ export default function VaultApp() {
                 {error && <p className="mb-2 rounded-[var(--radius)] bg-[var(--danger-bg)] px-4 py-2 text-sm text-[var(--danger)]">{error}</p>}
                 {inputBox()}
                 <p className="mt-2 text-center text-xs text-[var(--mist)]">
-                  AI-assisted insights &mdash; always verify critical details.
+                  Answers come from your documents. Click a source to read the original excerpt.
                 </p>
               </div>
             </div>
@@ -1299,6 +1273,7 @@ export default function VaultApp() {
           </div>
         </div>
       )}
+
     </div>
   );
 }

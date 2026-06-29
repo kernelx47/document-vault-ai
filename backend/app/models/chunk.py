@@ -1,3 +1,5 @@
+"""SQLAlchemy model for document text chunks with vector embeddings."""
+
 import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
@@ -14,6 +16,8 @@ if TYPE_CHECKING:
 
 
 class DocumentChunk(Base):
+    """An indexed text chunk of a document, with optional embedding vector."""
+
     __tablename__ = "document_chunks"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)

@@ -1,3 +1,5 @@
+"""Pydantic schema for the service health-check endpoint."""
+
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -9,6 +11,8 @@ HealthStatus = Literal["ok", "degraded"]
 
 
 class HealthResponse(BaseModel):
+    """Response reporting the health status of the API and its dependencies."""
+
     model_config = ConfigDict(json_schema_extra={"examples": [HEALTH_EXAMPLE]})
 
     service: str = Field(description="Service identifier.")

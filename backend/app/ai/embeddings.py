@@ -1,3 +1,5 @@
+"""Embedding provider abstraction for generating vector representations of text."""
+
 import logging
 from functools import lru_cache
 
@@ -7,6 +9,8 @@ logger = logging.getLogger("app.embeddings")
 
 
 class EmbeddingProvider:
+    """Abstract base for text embedding providers."""
+
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
         raise NotImplementedError
 
@@ -20,6 +24,7 @@ class EmbeddingProvider:
 
 
 class LocalEmbeddingProvider(EmbeddingProvider):
+    """Embedding provider using a local sentence-transformers model."""
     @lru_cache(maxsize=1)
     def _model(self):
         from sentence_transformers import SentenceTransformer
@@ -42,6 +47,7 @@ class LocalEmbeddingProvider(EmbeddingProvider):
 
 
 def get_embedding_provider() -> EmbeddingProvider:
+    """Instantiate the configured embedding provider."""
     settings = get_settings()
     if settings.embedding_provider == "local":
         return LocalEmbeddingProvider()

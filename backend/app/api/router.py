@@ -1,3 +1,5 @@
+"""Top-level API router that mounts all v1 sub-routers."""
+
 from fastapi import APIRouter
 
 from app.api.v1 import chat, documents, health, metrics

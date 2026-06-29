@@ -1,3 +1,5 @@
+"""Chat session and message orchestration — creates sessions, runs RAG, persists history."""
+
 import logging
 import re
 import time
@@ -10,7 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.ai.guardrails import InputBlockedError, check_input_async, check_output, check_output_async
+from app.ai.guardrails import InputBlockedError, check_input_async, check_output_async
 from app.ai.langchain_rag import stream_answer as langchain_stream_answer
 from app.ai.llm import generate_followup_suggestions, generate_session_title
 from app.config import get_settings
@@ -44,6 +46,7 @@ _TRIVIAL_GREETING = re.compile(
 
 
 async def create_chat_session(db: AsyncSession, document_id: uuid.UUID) -> ChatSessionCreateResponse:
+    """Create a chat session for a single document."""
     return await create_multi_chat_session(
         db, MultiChatSessionCreateRequest(document_ids=[document_id])
     )
@@ -52,6 +55,7 @@ async def create_chat_session(db: AsyncSession, document_id: uuid.UUID) -> ChatS
 async def create_multi_chat_session(
     db: AsyncSession, payload: MultiChatSessionCreateRequest
 ) -> ChatSessionCreateResponse:
+    """Create a chat session spanning multiple documents."""
     settings = get_settings()
     if len(payload.document_ids) > settings.max_multi_doc_chat_documents:
         raise HTTPException(
@@ -88,6 +92,7 @@ async def create_multi_chat_session(
 
 
 async def get_chat_session(db: AsyncSession, session_id: uuid.UUID) -> ChatSessionDetail:
+    """Return session metadata including linked documents and message count."""
     session = await _get_session_or_raise(db, session_id)
     document_ids = await _get_session_document_ids(db, session)
     message_count = await db.scalar(
@@ -107,6 +112,7 @@ async def get_chat_session(db: AsyncSession, session_id: uuid.UUID) -> ChatSessi
 async def ask_question(
     db: AsyncSession, session_id: uuid.UUID, payload: ChatMessageRequest
 ) -> ChatMessageResponse:
+    """Run RAG pipeline and return an answer with citations."""
     session, history_messages, question = await _prepare_question(db, session_id, payload)
     document_ids = await _get_session_document_ids(db, session)
     started = time.perf_counter()
@@ -169,6 +175,7 @@ async def ask_question(
 async def stream_question_answer(
     db: AsyncSession, session_id: uuid.UUID, payload: ChatMessageRequest
 ) -> AsyncIterator[str]:
+    """Stream RAG answer tokens via server-sent events."""
     session, history_messages, question = await _prepare_question(db, session_id, payload)
     document_ids = await _get_session_document_ids(db, session)
     started = time.perf_counter()
@@ -219,6 +226,7 @@ async def stream_question_answer(
 
 
 async def get_chat_history(db: AsyncSession, session_id: uuid.UUID) -> ChatHistoryResponse:
+    """Return all messages in a chat session, oldest first."""
     session = await _get_session_or_raise(db, session_id)
     document_ids = await _get_session_document_ids(db, session)
     result = await db.execute(

@@ -83,9 +83,26 @@ export async function fetchHealth(): Promise<HealthResponse> {
   return parseJson(response);
 }
 
-export async function listDocuments(): Promise<DocumentListResponse> {
-  const response = await fetch(`${API_BASE}/documents`, { cache: "no-store" });
-  return parseJson(response);
+export async function listDocuments(status?: string): Promise<DocumentListResponse> {
+  const PAGE_SIZE = 100;
+  let page = 1;
+  let allItems: DocumentSummary[] = [];
+  let total = 0;
+  const statusParam = status ? `&status=${status}` : "";
+
+  while (true) {
+    const response = await fetch(
+      `${API_BASE}/documents?page=${page}&page_size=${PAGE_SIZE}${statusParam}`,
+      { cache: "no-store" },
+    );
+    const data: DocumentListResponse = await parseJson(response);
+    total = data.total;
+    allItems = allItems.concat(data.items);
+    if (allItems.length >= total) break;
+    page++;
+  }
+
+  return { items: allItems, total };
 }
 
 export async function uploadDocument(
@@ -248,6 +265,72 @@ export async function getChatHistory(sessionId: string) {
     cache: "no-store",
   });
   return parseJson<{ session_id: string; title: string | null; messages: ChatMessage[] }>(response);
+}
+
+/* ─── Batch uploads ──────────────────────────────────────────── */
+
+export type BatchDocumentSummary = {
+  id: string;
+  filename: string;
+  status: string;
+  file_size_bytes: number;
+  created_at: string;
+};
+
+export type BatchSummary = {
+  id: string;
+  label: string;
+  total_files: number;
+  ready: number;
+  processing: number;
+  pending: number;
+  failed: number;
+  created_at: string;
+};
+
+export type BatchDetail = BatchSummary & {
+  documents: BatchDocumentSummary[];
+};
+
+export type BatchListResponse = {
+  items: BatchSummary[];
+  total: number;
+  page: number;
+  page_size: number;
+};
+
+export type BatchUploadResponse = {
+  batch_id: string | null;
+  accepted: Array<{ id: string; filename: string; status: string }>;
+  failed: Array<{ filename: string; error: string }>;
+  queued_count: number;
+  failed_count: number;
+  message: string;
+};
+
+export async function uploadBatch(files: File[]): Promise<BatchUploadResponse> {
+  const formData = new FormData();
+  for (const file of files) formData.append("files", file);
+  const response = await fetch(`${API_BASE}/documents/upload/batch`, {
+    method: "POST",
+    body: formData,
+  });
+  return parseJson(response);
+}
+
+export async function listBatches(page = 1, pageSize = 50): Promise<BatchListResponse> {
+  const response = await fetch(
+    `${API_BASE}/documents/batches?page=${page}&page_size=${pageSize}`,
+    { cache: "no-store" },
+  );
+  return parseJson(response);
+}
+
+export async function getBatch(batchId: string): Promise<BatchDetail> {
+  const response = await fetch(`${API_BASE}/documents/batches/${batchId}`, {
+    cache: "no-store",
+  });
+  return parseJson(response);
 }
 
 /* ─── Platform metrics ───────────────────────────────────────── */

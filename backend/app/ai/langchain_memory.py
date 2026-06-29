@@ -1,3 +1,5 @@
+"""Convert chat history into LangChain memory structures for conversation context."""
+
 from langchain_classic.memory import ConversationBufferWindowMemory
 from langchain_core.messages import AIMessage, HumanMessage
 
@@ -7,6 +9,7 @@ HISTORY_WINDOW = 4
 
 
 def chat_messages_to_langchain(messages: list[ChatMessage]) -> list[HumanMessage | AIMessage]:
+    """Convert recent chat messages to LangChain message objects."""
     recent = messages[-HISTORY_WINDOW:] if len(messages) > HISTORY_WINDOW else messages
     langchain_messages: list[HumanMessage | AIMessage] = []
     for message in recent:
@@ -18,6 +21,7 @@ def chat_messages_to_langchain(messages: list[ChatMessage]) -> list[HumanMessage
 
 
 def build_conversation_buffer(messages: list[ChatMessage]) -> ConversationBufferWindowMemory:
+    """Create a windowed memory buffer populated with the given chat messages."""
     memory = ConversationBufferWindowMemory(
         k=HISTORY_WINDOW,
         return_messages=True,
@@ -32,6 +36,7 @@ def build_conversation_buffer(messages: list[ChatMessage]) -> ConversationBuffer
 
 
 def get_buffered_chat_history(messages: list[ChatMessage]) -> list[HumanMessage | AIMessage]:
+    """Return the windowed subset of chat history as LangChain messages."""
     memory = build_conversation_buffer(messages)
     variables = memory.load_memory_variables({})
     history = variables.get("chat_history", [])

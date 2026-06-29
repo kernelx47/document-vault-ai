@@ -1,3 +1,5 @@
+"""RAG pipeline using LangChain for context-grounded answer generation and streaming."""
+
 import asyncio
 import logging
 from collections.abc import AsyncIterator
@@ -133,6 +135,7 @@ async def generate_answer(
     history_messages: list[ChatMessage],
     retrieved: list[RetrievedChunk],
 ) -> str:
+    """Generate a complete answer grounded in retrieved document chunks with retries."""
     context_blocks = build_context_blocks(retrieved)
 
     last_error: Exception | None = None
@@ -157,6 +160,7 @@ async def stream_answer(
     history_messages: list[ChatMessage],
     retrieved: list[RetrievedChunk],
 ) -> AsyncIterator[str]:
+    """Stream a token-by-token answer grounded in retrieved document chunks with retries."""
     context_blocks = build_context_blocks(retrieved)
 
     last_error: Exception | None = None

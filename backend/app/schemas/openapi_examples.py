@@ -1,3 +1,5 @@
+"""Shared example payloads used in OpenAPI schema documentation."""
+
 EXAMPLE_DOC_ID = "550e8400-e29b-41d4-a716-446655440000"
 EXAMPLE_DOC_ID_2 = "6ba7b812-9dad-11d1-80b4-00c04fd430c8"
 EXAMPLE_SESSION_ID = "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
@@ -245,3 +247,14 @@ CHAT_STREAM_SSE_EXAMPLE = (
     'data: {"token": " renewal"}\n\n'
     'data: {"done": true}\n\n'
 )
+
+COMPARE_REQUEST_EXAMPLE = {
+    "document_ids": [EXAMPLE_DOC_ID, EXAMPLE_DOC_ID_2],
+    "focus": "coverage limits and pricing",
+}
+
+INSIGHTS_REGENERATE_EXAMPLE = {
+    "length": "detailed",
+    "tone": "executive",
+    "focus_areas": ["renewal dates", "liability limits"],
+}

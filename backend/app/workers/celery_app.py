@@ -1,3 +1,5 @@
+"""Celery application instance and broker configuration."""
+
 from celery import Celery
 
 from app.config import get_settings

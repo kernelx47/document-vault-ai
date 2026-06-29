@@ -1,3 +1,5 @@
+"""Aggregated metrics queries for documents, processing, storage, and system health."""
+
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -9,19 +11,24 @@ from app.models import ChatMessage, ChatSession, Document, DocumentStatus, Proce
 from app.schemas.metrics import (
     ChatMetrics,
     DocumentMetricsResponse,
+    MetricsTimeseriesResponse,
     ProcessingHistoryResponse,
     ProcessingJobRecord,
     ProcessingMetricsResponse,
+    ProcessingTimeSeriesPoint,
     StageMetrics,
     StorageMetricsResponse,
     SystemMetricsResponse,
+    AIUsageTimeSeriesPoint,
 )
-from app.services.api_latency import get_api_latency_stats
+from app.services.api_latency import get_api_latency_stats, get_recent_api_latency_samples
+from app.services.ai_usage_service import get_ai_usage_timeseries
 from app.services.rag_metrics import get_chat_metrics
 from app.services.worker_health import get_worker_queue_depth
 
 
 async def get_document_metrics(db: AsyncSession) -> DocumentMetricsResponse:
+    """Return aggregated document counts by status and storage totals."""
     status_result = await db.execute(
         select(Document.status, func.count()).group_by(Document.status)
     )
@@ -44,6 +51,7 @@ async def get_document_metrics(db: AsyncSession) -> DocumentMetricsResponse:
 
 
 async def get_processing_metrics(db: AsyncSession) -> ProcessingMetricsResponse:
+    """Return processing job counts, failure rate, and per-stage timing."""
     status_result = await db.execute(
         select(ProcessingJob.status, func.count()).group_by(ProcessingJob.status)
     )
@@ -92,6 +100,7 @@ async def get_processing_metrics(db: AsyncSession) -> ProcessingMetricsResponse:
 
 
 async def get_storage_metrics(db: AsyncSession) -> StorageMetricsResponse:
+    """Return storage footprint across files, chunks, and chat data."""
     settings = get_settings()
 
     total_file_bytes = await db.scalar(
@@ -121,6 +130,7 @@ async def get_storage_metrics(db: AsyncSession) -> StorageMetricsResponse:
 async def get_processing_history(
     db: AsyncSession, *, limit: int = 50, offset: int = 0
 ) -> ProcessingHistoryResponse:
+    """Return paginated processing job records for audit and debugging."""
     total = await db.scalar(select(func.count()).select_from(ProcessingJob)) or 0
 
     result = await db.execute(
@@ -143,6 +153,7 @@ async def get_processing_history(
 
 
 async def get_system_metrics(db: AsyncSession) -> SystemMetricsResponse:
+    """Return an operational performance snapshot: latency, queue depth, and failure rates."""
     avg_api_latency_ms, p95_api_latency_ms, api_request_samples, api_latency_by_route = (
         await get_api_latency_stats()
     )
@@ -187,4 +198,40 @@ async def get_system_metrics(db: AsyncSession) -> SystemMetricsResponse:
             avg_rag_duration_ms=avg_rag_ms,
             avg_retrieval_duration_ms=avg_retrieval_ms,
         ),
+    )
+
+
+async def get_metrics_timeseries(db: AsyncSession, *, hours: int = 24) -> MetricsTimeseriesResponse:
+    """Return time-bucketed metrics for dashboard sparklines and trend charts."""
+    ai_usage_raw = await get_ai_usage_timeseries(hours=hours)
+    ai_usage = [AIUsageTimeSeriesPoint(**point) for point in ai_usage_raw]
+    api_latency_ms = await get_recent_api_latency_samples(limit=60)
+
+    cutoff = datetime.now(UTC) - timedelta(hours=hours)
+    result = await db.execute(
+        select(ProcessingJob.created_at, ProcessingJob.status).where(ProcessingJob.created_at >= cutoff)
+    )
+    buckets: dict[str, dict[str, int | str]] = {}
+    for created_at, status in result.all():
+        key = created_at.strftime("%Y-%m-%dT%H:00")
+        label = created_at.strftime("%b %d %H:00")
+        bucket = buckets.setdefault(key, {"label": label, "completed": 0, "failed": 0})
+        if status == ProcessingJobStatus.FAILED:
+            bucket["failed"] = int(bucket["failed"]) + 1
+        elif status == ProcessingJobStatus.COMPLETED:
+            bucket["completed"] = int(bucket["completed"]) + 1
+
+    processing_jobs = [
+        ProcessingTimeSeriesPoint(
+            label=str(buckets[key]["label"]),
+            completed=int(buckets[key]["completed"]),
+            failed=int(buckets[key]["failed"]),
+        )
+        for key in sorted(buckets.keys())
+    ]
+
+    return MetricsTimeseriesResponse(
+        ai_usage=ai_usage,
+        api_latency_ms=api_latency_ms,
+        processing_jobs=processing_jobs,
     )

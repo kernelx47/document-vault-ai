@@ -1,3 +1,5 @@
+"""Pydantic schemas for document upload, status, listing, and versioning endpoints."""
+
 from datetime import datetime
 from uuid import UUID
 
@@ -15,6 +17,8 @@ from app.schemas.openapi_examples import (
 
 
 class DocumentUploadResponse(BaseModel):
+    """Response confirming a single document upload was accepted for processing."""
+
     model_config = ConfigDict(json_schema_extra={"examples": [DOCUMENT_UPLOAD_EXAMPLE]})
 
     id: UUID = Field(description="Unique document identifier. Use for status polling and chat.")
@@ -29,13 +33,18 @@ class DocumentUploadResponse(BaseModel):
 
 
 class DocumentUploadBatchFailure(BaseModel):
+    """Details of a single file that failed validation during batch upload."""
+
     filename: str = Field(description="Name of the file that failed validation.")
     error: str = Field(description="Reason the file was rejected.")
 
 
 class DocumentUploadBatchResponse(BaseModel):
+    """Response summarizing the results of a batch document upload."""
+
     model_config = ConfigDict(json_schema_extra={"examples": [DOCUMENT_UPLOAD_BATCH_EXAMPLE]})
 
+    batch_id: UUID | None = Field(default=None, description="Batch tracking ID for the Activity Monitor.")
     accepted: list[DocumentUploadResponse] = Field(description="Files queued for processing.")
     failed: list[DocumentUploadBatchFailure] = Field(
         description="Files rejected during validation (invalid type, size, etc.)."
@@ -46,6 +55,8 @@ class DocumentUploadBatchResponse(BaseModel):
 
 
 class DocumentStatusResponse(BaseModel):
+    """Response for polling a document's current processing status."""
+
     model_config = ConfigDict(json_schema_extra={"examples": [DOCUMENT_STATUS_EXAMPLE]})
 
     id: UUID
@@ -62,6 +73,8 @@ class DocumentStatusResponse(BaseModel):
 
 
 class DocumentSummary(BaseModel):
+    """Compact document representation used in list responses."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -86,6 +99,8 @@ class DocumentSummary(BaseModel):
 
 
 class DocumentDetail(DocumentSummary):
+    """Full document details including AI-generated summary and insights."""
+
     model_config = ConfigDict(
         from_attributes=True,
         json_schema_extra={"examples": [DOCUMENT_DETAIL_EXAMPLE]},
@@ -104,6 +119,8 @@ class DocumentDetail(DocumentSummary):
 
 
 class DocumentInsightsResponse(BaseModel):
+    """Response containing AI-generated insights for a document."""
+
     model_config = ConfigDict(json_schema_extra={"examples": [DOCUMENT_INSIGHTS_EXAMPLE]})
 
     id: UUID
@@ -119,6 +136,8 @@ class DocumentInsightsResponse(BaseModel):
 
 
 class DocumentListResponse(BaseModel):
+    """Paginated list of documents."""
+
     model_config = ConfigDict(json_schema_extra={"examples": [DOCUMENT_LIST_EXAMPLE]})
 
     items: list[DocumentSummary]
@@ -128,6 +147,8 @@ class DocumentListResponse(BaseModel):
 
 
 class DocumentVersionSummary(BaseModel):
+    """Summary of a single version within a document group."""
+
     id: UUID
     filename: str
     version_number: int
@@ -137,6 +158,8 @@ class DocumentVersionSummary(BaseModel):
 
 
 class DocumentVersionListResponse(BaseModel):
+    """Response listing all versions of a document group."""
+
     document_group_id: UUID
     items: list[DocumentVersionSummary]
     total: int

@@ -1,8 +1,10 @@
+"""SQLAlchemy model for uploaded documents and their metadata."""
+
 import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import Boolean, DateTime, Enum, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -10,6 +12,7 @@ from app.db.base import Base
 from app.models.enums import DocumentStatus
 
 if TYPE_CHECKING:
+    from app.models.batch import UploadBatch
     from app.models.chat import ChatSession
     from app.models.chat_session_document import ChatSessionDocument
     from app.models.chunk import DocumentChunk
@@ -17,6 +20,8 @@ if TYPE_CHECKING:
 
 
 class Document(Base):
+    """A versioned document with processing state, AI-generated insights, and related chunks."""
+
     __tablename__ = "documents"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -44,6 +49,9 @@ class Document(Base):
     document_group_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
     version_number: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     is_latest: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
+    batch_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("upload_batches.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     processing_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     processing_completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -70,3 +78,4 @@ class Document(Base):
     chat_session_links: Mapped[list["ChatSessionDocument"]] = relationship(
         back_populates="document", cascade="all, delete-orphan"
     )
+    batch: Mapped["UploadBatch | None"] = relationship(back_populates="documents")

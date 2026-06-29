@@ -1,3 +1,5 @@
+"""Pydantic schemas for chat session and message API endpoints."""
+
 from datetime import datetime
 from uuid import UUID
 
@@ -15,6 +17,8 @@ from app.schemas.openapi_examples import (
 
 
 class Citation(BaseModel):
+    """A source reference linking an answer back to a retrieved document chunk."""
+
     chunk_id: UUID = Field(description="ID of the source chunk in the vector store.")
     document_id: UUID | None = Field(
         default=None,
@@ -34,6 +38,8 @@ class Citation(BaseModel):
 
 
 class ChatSessionCreateResponse(BaseModel):
+    """Response returned when a new chat session is created."""
+
     model_config = ConfigDict(
         from_attributes=True,
         json_schema_extra={"examples": [CHAT_SESSION_CREATE_EXAMPLE]},
@@ -50,6 +56,8 @@ class ChatSessionCreateResponse(BaseModel):
 
 
 class ChatSessionDetail(ChatSessionCreateResponse):
+    """Extended chat session details including update time and message count."""
+
     model_config = ConfigDict(
         from_attributes=True,
         json_schema_extra={"examples": [CHAT_SESSION_DETAIL_EXAMPLE]},
@@ -60,6 +68,8 @@ class ChatSessionDetail(ChatSessionCreateResponse):
 
 
 class MultiChatSessionCreateRequest(BaseModel):
+    """Request body for creating a chat session across multiple documents."""
+
     model_config = ConfigDict(json_schema_extra={"examples": [MULTI_CHAT_SESSION_REQUEST_EXAMPLE]})
 
     document_ids: list[UUID] = Field(
@@ -71,6 +81,8 @@ class MultiChatSessionCreateRequest(BaseModel):
 
 
 class ChatMessageRequest(BaseModel):
+    """Request body for sending a question to a chat session."""
+
     model_config = ConfigDict(json_schema_extra={"examples": [CHAT_MESSAGE_REQUEST_EXAMPLE]})
 
     question: str = Field(
@@ -81,6 +93,8 @@ class ChatMessageRequest(BaseModel):
 
 
 class ChatMessageResponse(BaseModel):
+    """Response representing a single chat message with citations and follow-ups."""
+
     model_config = ConfigDict(
         from_attributes=True,
         json_schema_extra={"examples": [CHAT_MESSAGE_EXAMPLE]},
@@ -105,6 +119,8 @@ class ChatMessageResponse(BaseModel):
 
 
 class ChatHistoryResponse(BaseModel):
+    """Response containing the full message history for a chat session."""
+
     model_config = ConfigDict(json_schema_extra={"examples": [CHAT_HISTORY_EXAMPLE]})
 
     session_id: UUID

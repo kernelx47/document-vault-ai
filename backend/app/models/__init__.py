@@ -1,3 +1,4 @@
+from app.models.batch import UploadBatch
 from app.models.chat import ChatMessage, ChatSession
 from app.models.chat_session_document import ChatSessionDocument
 from app.models.chunk import DocumentChunk
@@ -15,4 +16,5 @@ __all__ = [
     "MessageRole",
     "ProcessingJob",
     "ProcessingJobStatus",
+    "UploadBatch",
 ]

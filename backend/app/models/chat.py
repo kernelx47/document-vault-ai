@@ -1,3 +1,5 @@
+"""SQLAlchemy models for chat sessions and messages."""
+
 import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
@@ -15,6 +17,8 @@ if TYPE_CHECKING:
 
 
 class ChatSession(Base):
+    """A conversation session linked to one or more documents."""
+
     __tablename__ = "chat_sessions"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -42,6 +46,8 @@ class ChatSession(Base):
 
 
 class ChatMessage(Base):
+    """A single user or assistant message within a chat session."""
+
     __tablename__ = "chat_messages"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)

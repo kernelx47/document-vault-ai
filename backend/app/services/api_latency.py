@@ -1,3 +1,5 @@
+"""Record and query per-route API latency samples stored in Redis."""
+
 import json
 import logging
 import re
@@ -21,6 +23,7 @@ _UUID_RE = re.compile(
 
 
 def normalize_api_path(path: str) -> str:
+    """Replace UUIDs in a URL path with ``{id}`` for route grouping."""
     return _UUID_RE.sub("{id}", path)
 
 
@@ -46,6 +49,7 @@ def _parse_samples(raw_samples: list[str | bytes]) -> list[float]:
 
 
 async def record_api_latency(duration_ms: float, *, method: str, path: str) -> None:
+    """Push a latency sample into the global and per-route Redis lists."""
     settings = get_settings()
     client = Redis.from_url(settings.redis_url)
     rounded = round(duration_ms, 2)
@@ -74,6 +78,7 @@ async def record_api_latency(duration_ms: float, *, method: str, path: str) -> N
 
 
 async def get_api_latency_stats() -> tuple[float | None, float | None, int, list[RouteLatencyMetrics]]:
+    """Return avg latency, p95, sample count, and per-route breakdowns."""
     settings = get_settings()
     client = Redis.from_url(settings.redis_url)
     try:
@@ -92,6 +97,23 @@ async def get_api_latency_stats() -> tuple[float | None, float | None, int, list
     avg = round(sum(values) / len(values), 2)
     p95 = _percentile(values, 0.95)
     return avg, p95, len(values), _build_route_metrics(route_map)
+
+
+async def get_recent_api_latency_samples(limit: int = 60) -> list[float]:
+    """Return recent latency samples oldest-first for sparkline charts."""
+    settings = get_settings()
+    client = Redis.from_url(settings.redis_url)
+    try:
+        samples = await client.lrange(LATENCY_KEY, 0, limit - 1)
+    except Exception:
+        logger.warning("Failed to read API latency samples from Redis", exc_info=True)
+        return []
+    finally:
+        await client.aclose()
+
+    values = _parse_samples(samples)
+    values.reverse()
+    return values
 
 
 def _build_route_metrics(route_map: dict[bytes | str, bytes | str]) -> list[RouteLatencyMetrics]:

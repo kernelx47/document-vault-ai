@@ -1,13 +1,16 @@
+"""Document CRUD operations — upload, list, detail, status, insights, and versioning."""
+
 import logging
 import uuid
 from pathlib import Path
 
 from fastapi import HTTPException, UploadFile, status
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update as sa_update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.models import Document, DocumentStatus
+from app.models import Document, DocumentStatus, UploadBatch
+from app.schemas.batch import BatchDetail, BatchDocumentSummary, BatchListResponse, BatchSummary
 from app.schemas.document import (
     DocumentDetail,
     DocumentInsightsResponse,
@@ -33,6 +36,8 @@ ALLOWED_EXTENSIONS = {".pdf", ".docx"}
 
 
 class UploadValidationError(Exception):
+    """Raised when an uploaded file fails validation checks."""
+
     def __init__(self, message: str):
         self.message = message
         super().__init__(message)
@@ -112,6 +117,7 @@ async def _queue_document(db: AsyncSession, document: Document) -> DocumentUploa
 
 
 async def create_document_upload(db: AsyncSession, file: UploadFile) -> DocumentUploadResponse:
+    """Validate, store, and queue a single uploaded document for processing."""
     try:
         content = await file.read()
     except Exception as exc:
@@ -129,6 +135,7 @@ async def create_document_upload(db: AsyncSession, file: UploadFile) -> Document
 async def create_document_uploads_batch(
     db: AsyncSession, files: list[UploadFile]
 ) -> DocumentUploadBatchResponse:
+    """Validate and queue multiple uploaded documents, collecting per-file failures."""
     settings = get_settings()
 
     if not files:
@@ -174,11 +181,26 @@ async def create_document_uploads_batch(
         )
 
     queued_count = len(accepted)
+
+    batch = UploadBatch(
+        label=f"Batch — {queued_count} file{'s' if queued_count != 1 else ''}",
+        total_files=queued_count,
+    )
+    db.add(batch)
+    await db.flush()
+
+    for resp in accepted:
+        await db.execute(
+            sa_update(Document).where(Document.id == resp.id).values(batch_id=batch.id)
+        )
+    await db.commit()
+
     message = f"{queued_count} document(s) queued for processing."
     if failed:
         message += f" {len(failed)} file(s) failed validation."
 
     return DocumentUploadBatchResponse(
+        batch_id=batch.id,
         accepted=accepted,
         failed=failed,
         queued_count=queued_count,
@@ -187,14 +209,23 @@ async def create_document_uploads_batch(
     )
 
 
-async def list_documents(db: AsyncSession, page: int = 1, page_size: int = 20) -> DocumentListResponse:
+async def list_documents(
+    db: AsyncSession, page: int = 1, page_size: int = 20, status_filter: str | None = None
+) -> DocumentListResponse:
+    """Return a paginated list of documents, newest first, with optional status filter."""
     page = max(page, 1)
     page_size = min(max(page_size, 1), 100)
     offset = (page - 1) * page_size
 
-    total = await db.scalar(select(func.count()).select_from(Document))
+    base = select(Document)
+    count_base = select(func.count()).select_from(Document)
+    if status_filter:
+        base = base.where(Document.status == status_filter)
+        count_base = count_base.where(Document.status == status_filter)
+
+    total = await db.scalar(count_base)
     result = await db.execute(
-        select(Document).order_by(Document.created_at.desc()).offset(offset).limit(page_size)
+        base.order_by(Document.created_at.desc()).offset(offset).limit(page_size)
     )
     documents = result.scalars().all()
 
@@ -207,11 +238,13 @@ async def list_documents(db: AsyncSession, page: int = 1, page_size: int = 20) -
 
 
 async def get_document(db: AsyncSession, document_id: uuid.UUID) -> DocumentDetail:
+    """Return full document metadata by ID."""
     document = await _get_document_or_raise(db, document_id)
     return DocumentDetail.model_validate(document)
 
 
 async def get_document_status(db: AsyncSession, document_id: uuid.UUID) -> DocumentStatusResponse:
+    """Return lightweight processing status for a document."""
     document = await _get_document_or_raise(db, document_id)
     return DocumentStatusResponse(
         id=document.id,
@@ -225,6 +258,7 @@ async def get_document_status(db: AsyncSession, document_id: uuid.UUID) -> Docum
 async def get_document_insights(
     db: AsyncSession, document_id: uuid.UUID
 ) -> DocumentInsightsResponse:
+    """Return AI-generated summary and insights for a ready document."""
     document = await _get_document_or_raise(db, document_id)
     if document.status != DocumentStatus.READY:
         raise HTTPException(
@@ -251,6 +285,7 @@ async def regenerate_document_insights(
     document_id: uuid.UUID,
     options: InsightsRegenerateRequest,
 ) -> DocumentInsightsResponse:
+    """Re-generate summary and insights with custom length, tone, and focus."""
     from app.models import DocumentChunk
 
     document = await _get_document_or_raise(db, document_id)
@@ -290,6 +325,7 @@ async def _get_document_or_raise(db: AsyncSession, document_id: uuid.UUID) -> Do
 async def create_document_version(
     db: AsyncSession, document_id: uuid.UUID, file: UploadFile
 ) -> DocumentUploadResponse:
+    """Upload a new version of an existing document into its version group."""
     existing = await _get_document_or_raise(db, document_id)
     try:
         content = await file.read()
@@ -321,6 +357,7 @@ async def create_document_version(
 
 
 async def list_document_versions(db: AsyncSession, document_id: uuid.UUID) -> DocumentVersionListResponse:
+    """Return all versions of a document group, newest first."""
     from app.schemas.document import DocumentVersionSummary
 
     document = await _get_document_or_raise(db, document_id)
@@ -346,3 +383,70 @@ async def list_document_versions(db: AsyncSession, document_id: uuid.UUID) -> Do
         ],
         total=len(versions),
     )
+
+
+async def list_batches(db: AsyncSession, page: int = 1, page_size: int = 20) -> BatchListResponse:
+    """Return paginated upload batches with aggregated document status counts."""
+    total = await db.scalar(select(func.count()).select_from(UploadBatch)) or 0
+    offset = (page - 1) * page_size
+
+    result = await db.execute(
+        select(UploadBatch).order_by(UploadBatch.created_at.desc()).limit(page_size).offset(offset)
+    )
+    batches = result.scalars().all()
+
+    items: list[BatchSummary] = []
+    for batch in batches:
+        counts = await _batch_status_counts(db, batch.id)
+        items.append(BatchSummary(
+            id=batch.id,
+            label=batch.label,
+            total_files=batch.total_files,
+            created_at=batch.created_at,
+            **counts,
+        ))
+
+    return BatchListResponse(items=items, total=int(total), page=page, page_size=page_size)
+
+
+async def get_batch(db: AsyncSession, batch_id: uuid.UUID) -> BatchDetail:
+    """Return a single batch with per-document status breakdown."""
+    batch = await db.get(UploadBatch, batch_id)
+    if not batch:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Batch not found.")
+
+    counts = await _batch_status_counts(db, batch_id)
+
+    docs_result = await db.execute(
+        select(Document)
+        .where(Document.batch_id == batch_id)
+        .order_by(Document.created_at.asc())
+    )
+    docs = [
+        BatchDocumentSummary.model_validate(doc)
+        for doc in docs_result.scalars().all()
+    ]
+
+    return BatchDetail(
+        id=batch.id,
+        label=batch.label,
+        total_files=batch.total_files,
+        created_at=batch.created_at,
+        documents=docs,
+        **counts,
+    )
+
+
+async def _batch_status_counts(db: AsyncSession, batch_id: uuid.UUID) -> dict[str, int]:
+    result = await db.execute(
+        select(Document.status, func.count())
+        .where(Document.batch_id == batch_id)
+        .group_by(Document.status)
+    )
+    counts = {s.value: c for s, c in result.all()}
+    return {
+        "ready": counts.get("ready", 0),
+        "processing": counts.get("processing", 0),
+        "pending": counts.get("pending", 0),
+        "failed": counts.get("failed", 0),
+    }

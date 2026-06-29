@@ -14,8 +14,6 @@ export function useAdminTheme() {
     const stored = window.localStorage.getItem(STORAGE_KEY) as AdminTheme | null;
     if (stored === "light" || stored === "dark") {
       setThemeState(stored);
-    } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
-      setThemeState("dark");
     }
     setMounted(true);
   }, []);

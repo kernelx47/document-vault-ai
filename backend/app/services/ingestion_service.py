@@ -1,3 +1,5 @@
+"""Document ingestion pipeline — extract, chunk, embed, store, and summarize."""
+
 import logging
 import time
 import uuid
@@ -29,6 +31,7 @@ def _sanitize_error(exc: Exception) -> str:
 
 
 def process_document(document_id: uuid.UUID) -> None:
+    """Run the full ingestion pipeline: extract, chunk, embed, summarize."""
     session = SessionLocal()
     try:
         document = session.get(Document, document_id)

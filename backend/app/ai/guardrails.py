@@ -19,6 +19,8 @@ logger = logging.getLogger("app.guardrails")
 # ── Input Guardrails ─────────────────────────────────────────────
 
 class InputBlockedError(Exception):
+    """Raised when user input is rejected by a guardrail tier."""
+
     def __init__(self, reason: str, category: str):
         self.reason = reason
         self.category = category

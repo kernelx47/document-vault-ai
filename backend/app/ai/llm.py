@@ -1,3 +1,5 @@
+"""LLM interaction layer for document analysis, chat, and auxiliary generation tasks."""
+
 import json
 import logging
 import re
@@ -29,11 +31,13 @@ def _record_llm_usage(operation: str, provider: str, model: str, input_text: str
 
 
 def generate_summary_and_insights(text: str) -> tuple[str, list[str]]:
+    """Return a summary and key insights from the given document text."""
     result = analyze_document(text)
     return result.summary, result.insights
 
 
 def analyze_document(text: str) -> DocumentAnalysisResult:
+    """Perform full document analysis returning summary, insights, category, tags, and sentiment."""
     if not text.strip():
         return DocumentAnalysisResult("", [], "Other", [], "neutral")
 
@@ -53,6 +57,7 @@ def regenerate_custom_summary(
     tone: str = "professional",
     focus_areas: list[str] | None = None,
 ) -> tuple[str, list[str]]:
+    """Regenerate a document summary with custom length, tone, and focus parameters."""
     if not text.strip():
         return "", []
 
@@ -73,6 +78,7 @@ def compare_documents(
     *,
     focus: str | None = None,
 ) -> dict:
+    """Compare multiple documents and return structured similarities, differences, and recommendations."""
     if len(document_blocks) < 2:
         raise ValueError("At least two documents are required for comparison.")
 
@@ -208,6 +214,7 @@ def _parse_summary_response(content: str, fallback_text: str) -> tuple[str, list
 
 
 def generate_chat_answer(system_prompt: str, user_prompt: str) -> str:
+    """Invoke the configured LLM to produce a single chat response."""
     settings = get_settings()
 
     if settings.llm_provider == "openai" and settings.openai_api_key:
@@ -219,6 +226,7 @@ def generate_chat_answer(system_prompt: str, user_prompt: str) -> str:
 
 
 def get_chat_llm():
+    """Return a LangChain chat model instance for the configured provider, or None."""
     settings = get_settings()
 
     if settings.llm_provider == "openai" and settings.openai_api_key:
@@ -291,6 +299,7 @@ def _chat_fallback(user_prompt: str) -> str:
 
 
 def stream_chat_answer(system_prompt: str, user_prompt: str):
+    """Yield chat response tokens incrementally from the configured LLM."""
     settings = get_settings()
 
     if settings.llm_provider == "openai" and settings.openai_api_key:
@@ -356,6 +365,7 @@ def generate_followup_suggestions(
     document_context: str = "",
     citation_context: str = "",
 ) -> list[str]:
+    """Suggest up to 3 contextual follow-up questions based on the last exchange."""
     settings = get_settings()
     kwargs = {
         "document_context": document_context or "No document metadata available.",
@@ -375,6 +385,7 @@ def generate_followup_suggestions(
 
 
 def generate_session_title(conversation: str) -> str | None:
+    """Generate a concise title summarizing the conversation, or None on failure."""
     settings = get_settings()
 
     if settings.llm_provider == "openai" and settings.openai_api_key:

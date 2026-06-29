@@ -1,3 +1,5 @@
+"""Synchronous SQLAlchemy engine and session factory for Celery workers."""
+
 from collections.abc import Generator
 
 from sqlalchemy import create_engine

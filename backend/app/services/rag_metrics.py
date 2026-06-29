@@ -1,3 +1,5 @@
+"""Record and aggregate chat/RAG request metrics in Redis."""
+
 import json
 import logging
 
@@ -17,6 +19,7 @@ async def record_chat_request(
     retrieval_ms: float | None,
     success: bool,
 ) -> None:
+    """Push a chat request timing sample to Redis."""
     settings = get_settings()
     client = Redis.from_url(settings.redis_url)
     payload = json.dumps(

@@ -1,9 +1,12 @@
+"""Document upload, retrieval, versioning, comparison, and insights endpoints."""
+
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Query, Request, UploadFile, status
+from fastapi import APIRouter, Body, Depends, File, Query, Request, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_db
+from app.schemas.batch import BatchDetail, BatchListResponse
 from app.schemas.chat import ChatSessionCreateResponse
 from app.schemas.document import (
     DocumentDetail,
@@ -13,6 +16,10 @@ from app.schemas.document import (
     DocumentUploadBatchResponse,
     DocumentUploadResponse,
     DocumentVersionListResponse,
+)
+from app.schemas.openapi_examples import (
+    COMPARE_REQUEST_EXAMPLE,
+    INSIGHTS_REGENERATE_EXAMPLE,
 )
 from app.schemas.openapi_responses import (
     CHAT_SESSION_RESPONSES,
@@ -89,9 +96,10 @@ async def upload_documents_batch(
 async def list_documents(
     page: int = Query(default=1, ge=1, description="Page number (1-based)."),
     page_size: int = Query(default=20, ge=1, le=100, description="Items per page (max 100)."),
+    status: str | None = Query(default=None, description="Filter by status: pending, processing, ready, failed."),
     db: AsyncSession = Depends(get_db),
 ) -> DocumentListResponse:
-    return await document_service.list_documents(db, page=page, page_size=page_size)
+    return await document_service.list_documents(db, page=page, page_size=page_size, status_filter=status)
 
 
 @router.post(
@@ -106,10 +114,47 @@ async def list_documents(
     responses=merge_responses(DOCUMENT_INSIGHTS_RESPONSES, RESPONSE_422),
 )
 async def compare_documents(
-    payload: DocumentCompareRequest,
+    payload: DocumentCompareRequest = Body(
+        openapi_examples={
+            "compare_coverage": {
+                "summary": "Compare coverage limits",
+                "value": COMPARE_REQUEST_EXAMPLE,
+            },
+        },
+    ),
     db: AsyncSession = Depends(get_db),
 ) -> DocumentCompareResponse:
     return await comparison_service.compare_document_set(db, payload)
+
+
+@router.get(
+    "/batches",
+    response_model=BatchListResponse,
+    summary="List upload batches",
+    response_description="Paginated list of batches with aggregated status counts.",
+    description="Returns all upload batches, newest first, with per-batch document status totals.",
+)
+async def list_batches(
+    page: int = Query(default=1, ge=1, description="Page number (1-based)."),
+    page_size: int = Query(default=20, ge=1, le=100, description="Items per page (max 100)."),
+    db: AsyncSession = Depends(get_db),
+) -> BatchListResponse:
+    return await document_service.list_batches(db, page=page, page_size=page_size)
+
+
+@router.get(
+    "/batches/{batch_id}",
+    response_model=BatchDetail,
+    summary="Get batch details",
+    response_description="Batch with per-document status breakdown.",
+    description="Returns a single upload batch including the status of every document in it.",
+    responses=DOCUMENT_READ_RESPONSES,
+)
+async def get_batch(
+    batch_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> BatchDetail:
+    return await document_service.get_batch(db, batch_id)
 
 
 @router.get(
@@ -176,7 +221,18 @@ async def get_document_insights(
 )
 async def regenerate_document_insights(
     document_id: UUID,
-    payload: InsightsRegenerateRequest,
+    payload: InsightsRegenerateRequest = Body(
+        openapi_examples={
+            "executive_detailed": {
+                "summary": "Executive tone, detailed length",
+                "value": INSIGHTS_REGENERATE_EXAMPLE,
+            },
+            "brief_neutral": {
+                "summary": "Brief neutral summary",
+                "value": {"length": "brief", "tone": "neutral", "focus_areas": []},
+            },
+        },
+    ),
     db: AsyncSession = Depends(get_db),
 ) -> DocumentInsightsResponse:
     return await document_service.regenerate_document_insights(db, document_id, payload)

@@ -1,3 +1,5 @@
+"""Health, liveness, and readiness probe endpoints."""
+
 import logging
 from typing import Literal
 

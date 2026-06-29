@@ -1,3 +1,5 @@
+"""Pydantic schemas for platform metrics and analytics endpoints."""
+
 from datetime import datetime
 from uuid import UUID
 
@@ -14,6 +16,8 @@ from app.schemas.openapi_examples import (
 
 
 class DocumentMetricsResponse(BaseModel):
+    """Response with aggregate document counts and storage totals."""
+
     model_config = ConfigDict(json_schema_extra={"examples": [DOCUMENT_METRICS_EXAMPLE]})
 
     total: int = Field(description="Total documents in the vault.")
@@ -26,6 +30,8 @@ class DocumentMetricsResponse(BaseModel):
 
 
 class RouteLatencyMetrics(BaseModel):
+    """Latency statistics for a single API route."""
+
     route: str = Field(description="HTTP method and normalized path (UUIDs replaced with `{id}`).")
     avg_duration_ms: float | None = Field(default=None, description="Average response time for this route.")
     p95_duration_ms: float | None = Field(default=None, description="95th percentile response time for this route.")
@@ -33,6 +39,8 @@ class RouteLatencyMetrics(BaseModel):
 
 
 class ChatMetrics(BaseModel):
+    """Rolling performance metrics for chat and RAG operations."""
+
     total_requests: int = Field(default=0, description="Chat/RAG requests in the rolling sample window.")
     error_count: int = Field(default=0, description="Chat/RAG requests that failed in the sample window.")
     error_rate: float = Field(ge=0.0, le=1.0, description="Ratio of failed chat/RAG requests (0.0–1.0).")
@@ -45,6 +53,8 @@ class ChatMetrics(BaseModel):
 
 
 class StageMetrics(BaseModel):
+    """Completion counts and average duration for a single pipeline stage."""
+
     stage: str = Field(description="Pipeline stage name (e.g. extract, embed).")
     completed: int = Field(default=0, description="Jobs completed at this stage.")
     failed: int = Field(default=0, description="Jobs that failed at this stage.")
@@ -52,6 +62,8 @@ class StageMetrics(BaseModel):
 
 
 class ProcessingMetricsResponse(BaseModel):
+    """Response with processing pipeline job counts and per-stage breakdown."""
+
     model_config = ConfigDict(json_schema_extra={"examples": [PROCESSING_METRICS_EXAMPLE]})
 
     total_jobs: int = Field(description="Total processing jobs recorded.")
@@ -69,6 +81,8 @@ class ProcessingMetricsResponse(BaseModel):
 
 
 class StorageMetricsResponse(BaseModel):
+    """Response with storage usage, chunk counts, and chat session totals."""
+
     model_config = ConfigDict(json_schema_extra={"examples": [STORAGE_METRICS_EXAMPLE]})
 
     total_file_bytes: int = Field(description="Sum of uploaded file sizes recorded in metadata.")
@@ -82,6 +96,8 @@ class StorageMetricsResponse(BaseModel):
 
 
 class ProcessingJobRecord(BaseModel):
+    """Serialized representation of a single processing job for history responses."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -94,6 +110,8 @@ class ProcessingJobRecord(BaseModel):
 
 
 class ProcessingHistoryResponse(BaseModel):
+    """Paginated list of processing job records."""
+
     model_config = ConfigDict(json_schema_extra={"examples": [PROCESSING_HISTORY_EXAMPLE]})
 
     items: list[ProcessingJobRecord] = Field(description="Processing job records, newest first.")
@@ -103,6 +121,8 @@ class ProcessingHistoryResponse(BaseModel):
 
 
 class SystemMetricsResponse(BaseModel):
+    """Response with API latency, worker status, and overall system health metrics."""
+
     model_config = ConfigDict(json_schema_extra={"examples": [SYSTEM_METRICS_EXAMPLE]})
 
     avg_api_latency_ms: float | None = Field(
@@ -138,6 +158,8 @@ class SystemMetricsResponse(BaseModel):
 
 
 class AIUsageByOperation(BaseModel):
+    """AI token usage and cost breakdown for a single operation type."""
+
     operation: str
     requests: int = 0
     input_tokens: int = 0
@@ -146,6 +168,8 @@ class AIUsageByOperation(BaseModel):
 
 
 class AIUsageByProvider(BaseModel):
+    """AI token usage and cost breakdown for a single provider."""
+
     provider: str
     requests: int = 0
     input_tokens: int = 0
@@ -154,6 +178,8 @@ class AIUsageByProvider(BaseModel):
 
 
 class AIUsageMetricsResponse(BaseModel):
+    """Response with aggregate AI usage, quotas, and per-operation/provider breakdowns."""
+
     total_requests: int = 0
     total_input_tokens: int = 0
     total_output_tokens: int = 0
@@ -163,3 +189,31 @@ class AIUsageMetricsResponse(BaseModel):
     daily_quota_remaining: int | None = None
     by_operation: list[AIUsageByOperation] = Field(default_factory=list)
     by_provider: list[AIUsageByProvider] = Field(default_factory=list)
+
+
+class AIUsageTimeSeriesPoint(BaseModel):
+    """A single time-series data point for AI usage metrics."""
+
+    label: str = Field(description="Human-readable hour bucket label.")
+    requests: int = 0
+    tokens: int = 0
+    cost_usd: float = 0.0
+
+
+class ProcessingTimeSeriesPoint(BaseModel):
+    """A single time-series data point for processing job outcomes."""
+
+    label: str = Field(description="Human-readable hour bucket label.")
+    completed: int = 0
+    failed: int = 0
+
+
+class MetricsTimeseriesResponse(BaseModel):
+    """Response containing time-series data for AI usage, latency, and processing."""
+
+    ai_usage: list[AIUsageTimeSeriesPoint] = Field(default_factory=list)
+    api_latency_ms: list[float] = Field(
+        default_factory=list,
+        description="Recent API latency samples in milliseconds, oldest first.",
+    )
+    processing_jobs: list[ProcessingTimeSeriesPoint] = Field(default_factory=list)

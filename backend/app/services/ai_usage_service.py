@@ -1,6 +1,8 @@
+"""Track AI API token usage, estimated costs, and daily quotas via Redis."""
+
 import json
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from redis import Redis
 
@@ -14,6 +16,7 @@ MAX_USAGE_SAMPLES = 2000
 
 
 def estimate_tokens(text: str) -> int:
+    """Return a rough token count (~4 chars per token)."""
     cleaned = text.strip()
     if not cleaned:
         return 0
@@ -47,6 +50,7 @@ def record_ai_usage_sync(
     input_tokens: int,
     output_tokens: int,
 ) -> None:
+    """Persist a single AI usage sample to Redis (synchronous)."""
     settings = get_settings()
     client = Redis.from_url(settings.redis_url, decode_responses=True)
     payload = json.dumps(
@@ -76,6 +80,7 @@ def record_ai_usage_sync(
 
 
 async def get_daily_ai_request_count() -> int:
+    """Return today's AI request count from Redis."""
     settings = get_settings()
     from redis.asyncio import Redis as AsyncRedis
 
@@ -91,7 +96,56 @@ async def get_daily_ai_request_count() -> int:
         await client.aclose()
 
 
+async def get_ai_usage_timeseries(hours: int = 24) -> list[dict]:
+    """Bucket AI usage samples by hour for dashboard sparklines."""
+    from redis.asyncio import Redis as AsyncRedis
+
+    settings = get_settings()
+    client = AsyncRedis.from_url(settings.redis_url, decode_responses=True)
+    try:
+        samples = await client.lrange(USAGE_SAMPLES_KEY, 0, -1)
+    except Exception:
+        logger.warning("Failed to read AI usage timeseries", exc_info=True)
+        return []
+    finally:
+        await client.aclose()
+
+    cutoff = datetime.now(UTC) - timedelta(hours=hours)
+    buckets: dict[str, dict] = {}
+
+    for item in samples:
+        try:
+            entry = json.loads(item)
+        except (json.JSONDecodeError, TypeError):
+            continue
+
+        recorded_raw = entry.get("recorded_at")
+        if not recorded_raw:
+            continue
+        try:
+            recorded_at = datetime.fromisoformat(str(recorded_raw).replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if recorded_at < cutoff:
+            continue
+
+        bucket_key = recorded_at.strftime("%Y-%m-%dT%H:00")
+        label = recorded_at.strftime("%b %d %H:00")
+        bucket = buckets.setdefault(
+            bucket_key,
+            {"label": label, "requests": 0, "tokens": 0, "cost_usd": 0.0},
+        )
+        input_tokens = int(entry.get("input_tokens", 0))
+        output_tokens = int(entry.get("output_tokens", 0))
+        bucket["requests"] += 1
+        bucket["tokens"] += input_tokens + output_tokens
+        bucket["cost_usd"] = round(bucket["cost_usd"] + float(entry.get("estimated_cost_usd", 0)), 6)
+
+    return [buckets[key] for key in sorted(buckets.keys())]
+
+
 async def get_ai_usage_metrics() -> dict:
+    """Aggregate AI usage samples by operation and provider."""
     from redis.asyncio import Redis as AsyncRedis
 
     settings = get_settings()

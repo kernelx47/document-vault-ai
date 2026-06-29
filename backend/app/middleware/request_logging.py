@@ -1,3 +1,5 @@
+"""Middleware that logs request method, path, status, and duration."""
+
 import logging
 import time
 
@@ -11,6 +13,7 @@ logger = logging.getLogger("app.request")
 
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
+    """Log every request with method, path, status, duration, and client IP."""
     async def dispatch(self, request: Request, call_next) -> Response:
         started = time.perf_counter()
         client_ip = request.client.host if request.client else "unknown"
