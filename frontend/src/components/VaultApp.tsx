@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import clsx from "clsx";
 import {
+  API_BASE,
   ChatMessage,
   compareDocuments,
   createChatSession,
@@ -15,7 +16,6 @@ import {
   getDocumentInsights,
   getDocumentStatus,
   isAbortError,
-  listDocuments,
   regenerateDocumentInsights,
   streamChatMessage,
   SummaryLength,
@@ -117,12 +117,9 @@ function IconUpload({ className }: { className?: string }) {
 }
 
 const THINKING_STAGES = [
-  { text: "Searching documents", icon: "🔍" },
-  { text: "Finding relevant passages", icon: "📄" },
-  { text: "Cross-referencing sources", icon: "🔗" },
-  { text: "Analyzing context", icon: "🧠" },
-  { text: "Crafting response", icon: "✍️" },
-  { text: "Double-checking citations", icon: "✅" },
+  { text: "Thinking", icon: "💭" },
+  { text: "Working on it", icon: "⚡" },
+  { text: "Almost there", icon: "✨" },
 ] as const;
 
 const DOT_COLORS = [
@@ -366,8 +363,11 @@ function groupSessionsByDate(sessions: LocalSession[]) {
 
 export default function VaultApp() {
   const [documents, setDocuments] = useState<DocumentSummary[]>([]);
+  const [totalDocCount, setTotalDocCount] = useState(0);
+  const [docsLoaded, setDocsLoaded] = useState(false);
   const [sessions, setSessions] = useState<LocalSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const hydratedRef = useRef(false);
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -397,11 +397,13 @@ export default function VaultApp() {
   const cancelledRef = useRef(false);
   const messageQueueRef = useRef<string[]>([]);
   const activeRequestRef = useRef<{ sessionId: string; assistantId: string } | null>(null);
+  const activeSessionRef = useRef<LocalSession | null>(null);
 
-  const activeSession = useMemo(
-    () => sessions.find((s) => s.id === activeSessionId) ?? null,
-    [sessions, activeSessionId],
-  );
+  const activeSession = useMemo(() => {
+    const s = sessions.find((s) => s.id === activeSessionId) ?? null;
+    activeSessionRef.current = s;
+    return s;
+  }, [sessions, activeSessionId]);
   const readyDocs = useMemo(() => documents.filter((d) => d.status === "ready"), [documents]);
   const sessionGroups = useMemo(() => groupSessionsByDate(sessions), [sessions]);
 
@@ -413,7 +415,19 @@ export default function VaultApp() {
   }, [question]);
 
   const refreshDocuments = useCallback(async () => {
-    try { setDocuments((await listDocuments("ready")).items); } catch { /* retry */ }
+    try {
+      const resp = await fetch(
+        `${API_BASE}/documents?status=ready&page=1&page_size=50`,
+        { cache: "no-store" },
+      );
+      if (resp.ok) {
+        const data = await resp.json();
+        setDocuments(data.items);
+        setTotalDocCount(data.total ?? data.items.length);
+      }
+    } catch { /* retry */ } finally {
+      setDocsLoaded(true);
+    }
   }, []);
 
   useEffect(() => {
@@ -421,6 +435,30 @@ export default function VaultApp() {
     const iv = setInterval(() => void refreshDocuments(), 5000);
     return () => clearInterval(iv);
   }, [refreshDocuments]);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("vault-sessions");
+      if (stored) setSessions(JSON.parse(stored));
+      const storedActive = localStorage.getItem("vault-active-session");
+      if (storedActive) setActiveSessionId(storedActive);
+    } catch { /* ignore */ }
+    hydratedRef.current = true;
+  }, []);
+
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    try {
+      const toStore = sessions.map((s) => ({ ...s, messages: s.messages.map((m) => ({ ...m, streaming: false })) }));
+      localStorage.setItem("vault-sessions", JSON.stringify(toStore));
+    } catch { /* quota exceeded — ignore */ }
+  }, [sessions]);
+
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    if (activeSessionId) localStorage.setItem("vault-active-session", activeSessionId);
+    else localStorage.removeItem("vault-active-session");
+  }, [activeSessionId]);
 
   async function loadDocumentInsights(documentId: string) {
     setActiveDocId(documentId);
@@ -579,8 +617,14 @@ export default function VaultApp() {
     const ac = new AbortController();
     abortControllerRef.current = ac;
 
-    let current = activeSession;
+    let current = activeSessionRef.current;
     if (!current) {
+      if (!docsLoaded) {
+        setError("Still loading documents — please wait a moment.");
+        setSending(false);
+        abortControllerRef.current = null;
+        return;
+      }
       if (readyDocs.length === 0) {
         setError("Upload and process at least one document first.");
         setSending(false);
@@ -596,6 +640,7 @@ export default function VaultApp() {
       };
       setSessions((p) => [s, ...p]);
       setActiveSessionId(s.id);
+      activeSessionRef.current = s;
       current = s;
     }
 
@@ -638,7 +683,8 @@ export default function VaultApp() {
           setError("No documents ready.");
           return;
         }
-        const res = await createChatSession(readyDocs.map((d) => d.id), ac.signal);
+        const docIds = readyDocs.slice(0, 10).map((d) => d.id);
+        const res = await createChatSession(docIds, ac.signal);
         serverSid = res.id;
         setSessions((p) => p.map((s) => (s.id === sid ? { ...s, serverSessionId: serverSid } : s)));
       }
@@ -673,11 +719,22 @@ export default function VaultApp() {
         try {
           const h = await getChatHistory(serverSid!);
           if (h.messages.length > 0) {
-            setSessions((p) => p.map((s) => (s.id === sid ? {
-              ...s,
-              messages: h.messages,
-              title: h.title ?? s.title,
-            } : s)));
+            const lastServer = h.messages[h.messages.length - 1];
+            setSessions((p) => p.map((s) => {
+              if (s.id !== sid) return s;
+              return {
+                ...s,
+                title: h.title ?? s.title,
+                messages: s.messages.map((m) => {
+                  if (m.id !== aId) return m;
+                  return {
+                    ...m,
+                    citations: lastServer.citations ?? m.citations,
+                    suggested_followups: lastServer.suggested_followups ?? m.suggested_followups,
+                  };
+                }),
+              };
+            }));
           }
         } catch { /* keep local */ }
       }
@@ -745,10 +802,28 @@ export default function VaultApp() {
   /* ─── Input box (render helper — NOT a component) ──────────── */
   const inputBox = (autoFocus?: boolean) => (
     <div className="relative rounded-[var(--radius-lg)] border border-[var(--lavender-mist)] bg-[var(--pure-paper)] shadow-sm">
-      {/* Thinking bar — shows above textarea when AI is working */}
+      {/* Queued messages — visible strip showing what's waiting */}
+      {queuedCount > 0 && (
+        <div className="border-b border-[var(--lavender-mist)] bg-[var(--iris-haze)]/40 px-4 py-2">
+          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--mist)]">Queued</p>
+          <div className="flex flex-wrap gap-1.5">
+            {messageQueueRef.current.map((msg, i) => (
+              <span key={i} className="inline-flex items-center gap-1.5 rounded-full bg-[var(--pure-paper)] border border-[var(--lavender-mist)] px-3 py-1 text-xs text-[var(--deep-ink)]">
+                <span className="max-w-[200px] truncate">{msg}</span>
+                <button
+                  onClick={() => { messageQueueRef.current.splice(i, 1); syncQueuedCount(); }}
+                  className="text-[var(--mist)] hover:text-[var(--danger)] transition-colors"
+                >
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
+                </button>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+      {/* Stop button — shows above textarea when AI is working */}
       {sending && (
-        <div className="flex items-center justify-between gap-2 border-b border-[var(--lavender-mist)] bg-[var(--iris-haze)]/60 px-4 py-2">
-          <InlineThinkingBar />
+        <div className="flex items-center justify-end border-b border-[var(--lavender-mist)] bg-[var(--iris-haze)]/40 px-4 py-1.5">
           <button
             type="button"
             onClick={handleCancel}
@@ -889,11 +964,13 @@ export default function VaultApp() {
                 <line x1="12" y1="3" x2="12" y2="15" />
               </svg>
               <span className="flex-1 text-left">Doc Uploader</span>
-              {readyDocs.length > 0 && (
+              {!docsLoaded ? (
+                <span className="h-5 w-7 animate-pulse rounded-full bg-[var(--lavender-mist)]" />
+              ) : totalDocCount > 0 ? (
                 <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[var(--electric-violet)] px-1.5 text-[11px] font-medium text-white">
-                  {readyDocs.length}
+                  {totalDocCount}
                 </span>
-              )}
+              ) : null}
             </Link>
             <Link
               href="/platform"
@@ -939,9 +1016,11 @@ export default function VaultApp() {
             <BrandWordmark />
           </div>
           <div className="flex-1" />
-          {readyDocs.length > 0 && (
-            <span className="text-xs text-[var(--overcast)]">{readyDocs.length} doc{readyDocs.length !== 1 ? "s" : ""}</span>
-          )}
+          {!docsLoaded ? (
+            <span className="h-3 w-12 animate-pulse rounded bg-[var(--lavender-mist)]" />
+          ) : totalDocCount > 0 ? (
+            <span className="text-xs text-[var(--overcast)]">{totalDocCount} doc{totalDocCount !== 1 ? "s" : ""}</span>
+          ) : null}
         </div>
 
         {/* Content */}
@@ -957,9 +1036,11 @@ export default function VaultApp() {
             <div className="w-full max-w-[640px]">
               {inputBox(true)}
               {error && <p className="mt-3 rounded-[var(--radius)] bg-[var(--danger-bg)] px-4 py-2 text-sm text-[var(--danger)]">{error}</p>}
-              <p className="mt-3 text-center text-xs text-[var(--mist)]">
-                Instantly searches across {readyDocs.length} document{readyDocs.length !== 1 ? "s" : ""} in your vault
-              </p>
+              {docsLoaded && totalDocCount > 0 && (
+                <p className="mt-3 text-center text-xs text-[var(--mist)]">
+                  Instantly searches across {totalDocCount} document{totalDocCount !== 1 ? "s" : ""} in your vault
+                </p>
+              )}
             </div>
           </div>
         ) : activeSession ? (
@@ -1001,7 +1082,7 @@ export default function VaultApp() {
                               {msg.suggested_followups?.length > 0 && (
                                 <div className="mt-3 flex flex-wrap gap-1.5">
                                   {msg.suggested_followups.map((f) => (
-                                    <button key={f} onClick={() => setQuestion(f)} className="rounded-full border border-[var(--lavender-mist)] px-3.5 py-1.5 text-[13px] text-[var(--heather)] transition-colors hover:border-[var(--electric-violet)] hover:text-[var(--electric-violet)]">
+                                    <button key={f} onClick={() => { if (sending) { enqueueMessage(f); } else { setQuestion(""); void runChatMessage(f); } }} className="rounded-full border border-[#a39ac14d] px-3.5 py-1.5 text-[13px] text-[var(--heather)] transition-colors hover:border-[var(--electric-violet)] hover:text-[var(--electric-violet)]">
                                       {f}
                                     </button>
                                   ))}

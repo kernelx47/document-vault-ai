@@ -73,8 +73,9 @@ FOLLOWUP_SYSTEM = """You suggest helpful follow-up questions that continue a nat
 Respond with JSON only: {"followups": ["question 1", "question 2", "question 3"]}
 Rules:
 - Each question must be under 80 characters
+- Only reference document filenames that appear in the "Documents in this session" list below — never invent filenames
+- If no documents are listed, ask broad questions about the user's vault without mentioning specific filenames
 - Questions must be specific and directly answerable from the documents discussed
-- Use document names, facts, and cited excerpts when helpful
 - Make them feel like natural next steps in the conversation, not generic
 - Vary the type: one detail question, one comparison question, one broader question"""
 

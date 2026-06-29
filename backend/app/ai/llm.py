@@ -381,7 +381,7 @@ def generate_followup_suggestions(
         if suggestions:
             return suggestions
 
-    return _followup_fallback(question)
+    return _followup_fallback(question, kwargs.get("document_context", ""))
 
 
 def generate_session_title(conversation: str) -> str | None:
@@ -526,9 +526,18 @@ def _followups_with_gemini(
     return _parse_followups(content)
 
 
-def _followup_fallback(question: str) -> list[str]:
+def _followup_fallback(question: str, document_context: str = "") -> list[str]:
+    doc_names = re.findall(r"- (.+?\.pdf)\b", document_context)
+    if doc_names:
+        first = doc_names[0]
+        second = doc_names[1] if len(doc_names) > 1 else doc_names[0]
+        return [
+            f"Can you summarize the key points from {first}?",
+            f"What dates or deadlines are mentioned in {second}?",
+            f"How do these documents compare on coverage?",
+        ]
     return [
-        "Can you summarize the key points?",
+        "Can you summarize the key points from my documents?",
         "What dates or deadlines are mentioned?",
-        f"Can you explain more about: {question[:60]}?",
+        "How do the documents compare to each other?",
     ]

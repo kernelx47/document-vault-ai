@@ -213,9 +213,13 @@ export async function streamChatMessage(
       buffer = lines.pop() ?? "";
       for (const line of lines) {
         if (!line.startsWith("data: ")) continue;
-        const payload = JSON.parse(line.slice(6));
-        if (payload.token) onToken(payload.token);
-        if (payload.done && payload.title) title = payload.title;
+        try {
+          const payload = JSON.parse(line.slice(6));
+          if (payload.token) onToken(payload.token);
+          if (payload.done && payload.title) title = payload.title;
+        } catch {
+          /* skip malformed SSE chunks */
+        }
       }
     }
   } finally {
