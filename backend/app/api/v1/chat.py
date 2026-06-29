@@ -145,8 +145,13 @@ async def stream_chat_message(
         try:
             async for token in chat_service.stream_question_answer(db, session_id, payload):
                 yield f"data: {json.dumps({'token': token})}\n\n"
-            session = await chat_service.get_chat_session(db, session_id)
-            yield f"data: {json.dumps({'done': True, 'title': session.title})}\n\n"
+            history = await chat_service.get_chat_history(db, session_id)
+            last_msg = history.messages[-1] if history.messages else None
+            done_payload: dict = {"done": True, "title": history.title}
+            if last_msg and last_msg.role == "assistant":
+                done_payload["suggested_followups"] = last_msg.suggested_followups
+                done_payload["citations"] = [c.model_dump(mode="json") for c in last_msg.citations]
+            yield f"data: {json.dumps(done_payload, default=str)}\n\n"
         except HTTPException as exc:
             yield f"data: {json.dumps({'error': exc.detail})}\n\n"
         except Exception:

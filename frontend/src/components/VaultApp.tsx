@@ -12,7 +12,6 @@ import {
   DocumentCompareResult,
   DocumentInsights,
   DocumentSummary,
-  getChatHistory,
   getDocumentInsights,
   getDocumentStatus,
   isAbortError,
@@ -692,7 +691,7 @@ export default function VaultApp() {
       if (cancelledRef.current) return;
 
       let gotTokens = false;
-      const generatedTitle = await streamChatMessage(serverSid!, q, (token) => {
+      const streamResult = await streamChatMessage(serverSid!, q, (token) => {
         gotTokens = true;
         setSessions((p) => p.map((s) => s.id === sid ? {
           ...s,
@@ -702,8 +701,8 @@ export default function VaultApp() {
 
       if (cancelledRef.current) return;
 
-      if (generatedTitle) {
-        setSessions((p) => p.map((s) => (s.id === sid ? { ...s, title: generatedTitle } : s)));
+      if (streamResult.title) {
+        setSessions((p) => p.map((s) => (s.id === sid ? { ...s, title: streamResult.title! } : s)));
       }
 
       if (!gotTokens) {
@@ -716,27 +715,20 @@ export default function VaultApp() {
           } : m),
         } : s));
       } else {
-        try {
-          const h = await getChatHistory(serverSid!);
-          if (h.messages.length > 0) {
-            const lastServer = h.messages[h.messages.length - 1];
-            setSessions((p) => p.map((s) => {
-              if (s.id !== sid) return s;
+        setSessions((p) => p.map((s) => {
+          if (s.id !== sid) return s;
+          return {
+            ...s,
+            messages: s.messages.map((m) => {
+              if (m.id !== aId) return m;
               return {
-                ...s,
-                title: h.title ?? s.title,
-                messages: s.messages.map((m) => {
-                  if (m.id !== aId) return m;
-                  return {
-                    ...m,
-                    citations: lastServer.citations ?? m.citations,
-                    suggested_followups: lastServer.suggested_followups ?? m.suggested_followups,
-                  };
-                }),
+                ...m,
+                citations: streamResult.citations.length > 0 ? streamResult.citations : m.citations,
+                suggested_followups: streamResult.suggested_followups.length > 0 ? streamResult.suggested_followups : m.suggested_followups,
               };
-            }));
-          }
-        } catch { /* keep local */ }
+            }),
+          };
+        }));
       }
     } catch (err) {
       if (cancelledRef.current || isAbortError(err)) {

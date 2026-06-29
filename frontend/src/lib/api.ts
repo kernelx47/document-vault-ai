@@ -182,12 +182,18 @@ export function isAbortError(err: unknown): boolean {
   return err instanceof DOMException && err.name === "AbortError";
 }
 
+export type StreamDonePayload = {
+  title: string | null;
+  suggested_followups: string[];
+  citations: ChatMessage["citations"];
+};
+
 export async function streamChatMessage(
   sessionId: string,
   question: string,
   onToken: (token: string) => void,
   signal?: AbortSignal,
-): Promise<string | null> {
+): Promise<StreamDonePayload> {
   const response = await fetch(`${API_BASE}/chat/sessions/${sessionId}/messages/stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -202,7 +208,7 @@ export async function streamChatMessage(
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
-  let title: string | null = null;
+  const result: StreamDonePayload = { title: null, suggested_followups: [], citations: [] };
 
   try {
     while (true) {
@@ -216,7 +222,11 @@ export async function streamChatMessage(
         try {
           const payload = JSON.parse(line.slice(6));
           if (payload.token) onToken(payload.token);
-          if (payload.done && payload.title) title = payload.title;
+          if (payload.done) {
+            result.title = payload.title ?? null;
+            result.suggested_followups = payload.suggested_followups ?? [];
+            result.citations = payload.citations ?? [];
+          }
         } catch {
           /* skip malformed SSE chunks */
         }
@@ -226,7 +236,7 @@ export async function streamChatMessage(
     reader.releaseLock();
   }
 
-  return title;
+  return result;
 }
 
 export async function getDocumentInsights(documentId: string): Promise<DocumentInsights> {
