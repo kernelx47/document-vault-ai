@@ -163,3 +163,63 @@ def test_format_conversation_for_title():
     assert "User: hi" in text
     assert "User: What is the GL limit?" in text
     assert "Assistant: The GL limit is $2M." in text
+
+
+def test_sanitize_rejects_greeting_title():
+    assert chat_service._sanitize_generated_title(
+        "Hello",
+        question="hello",
+        all_user_messages=["hello"],
+    ) is None
+
+
+@pytest.mark.asyncio
+async def test_llm_greeting_title_not_persisted(db_session, ready_document):
+    session = await chat_service.create_multi_chat_session(
+        db_session,
+        MultiChatSessionCreateRequest(document_ids=[ready_document.id]),
+    )
+
+    with (
+        patch("app.services.chat_service.retrieve_for_question", new_callable=AsyncMock, return_value=[]),
+        patch("app.services.rag_service.generate_answer", new_callable=AsyncMock, return_value="Hello! How can I help with your documents today?"),
+        patch("app.services.chat_service.generate_followup_suggestions", return_value=[]),
+        patch("app.services.chat_service.generate_session_title", return_value="Hello"),
+    ):
+        await chat_service.ask_question(
+            db_session,
+            session.id,
+            ChatMessageRequest(question="hello"),
+        )
+
+    result = await db_session.get(ChatSession, session.id)
+    assert result is not None
+    assert result.title is None
+
+
+@pytest.mark.asyncio
+async def test_answer_fallback_when_llm_unavailable(db_session, ready_document):
+    session = await chat_service.create_multi_chat_session(
+        db_session,
+        MultiChatSessionCreateRequest(document_ids=[ready_document.id]),
+    )
+
+    with (
+        patch("app.services.chat_service.retrieve_for_question", new_callable=AsyncMock, return_value=[]),
+        patch(
+            "app.services.rag_service.generate_answer",
+            new_callable=AsyncMock,
+            return_value="The general liability limit is $2M per occurrence [Source 1].",
+        ),
+        patch("app.services.chat_service.generate_followup_suggestions", return_value=[]),
+        patch("app.services.chat_service.generate_session_title", return_value=None),
+    ):
+        await chat_service.ask_question(
+            db_session,
+            session.id,
+            ChatMessageRequest(question="What is the GL limit?"),
+        )
+
+    result = await db_session.get(ChatSession, session.id)
+    assert result is not None
+    assert result.title == "The general liability limit is $2M per occurrence"

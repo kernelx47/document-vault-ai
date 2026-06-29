@@ -74,10 +74,14 @@ Respond with JSON only: {"followups": ["question 1", "question 2", "question 3"]
 Rules:
 - Each question must be under 80 characters
 - Only reference document filenames that appear in the "Documents in this session" list below — never invent filenames
-- If no documents are listed, ask broad questions about the user's vault without mentioning specific filenames
-- Questions must be specific and directly answerable from the documents discussed
-- Make them feel like natural next steps in the conversation, not generic
-- Vary the type: one detail question, one comparison question, one broader question"""
+- Questions must be directly answerable from facts already present in the assistant answer or cited sources
+- If the assistant answer says it lacks information, found nothing, has no citations, or asks the user to provide excerpts:
+  * Do NOT suggest questions that assume document content was already retrieved
+  * Do NOT ask to compare, summarize, or extract topics from documents the assistant could not read
+  * Instead suggest recovery steps: rephrase the question, narrow to one topic, name a coverage area, or pick one document
+- If the answer successfully cited sources, suggest natural next steps grounded in those facts
+- Make them feel like natural next steps, not generic templates
+- Return 2-3 follow-ups (fewer is fine when context is thin)"""
 
 FOLLOWUP_USER = """Documents in this session:
 {document_context}
@@ -97,10 +101,12 @@ SESSION_TITLE_SYSTEM = """You generate a short sidebar title for a document chat
 Respond with JSON only: {"title": "..."}
 Rules:
 - Maximum 6 words
-- Capture the main topic of the exchange, not the literal first message
+- Summarize the topic being discussed, never copy the user's greeting or first message verbatim
+- Never use titles like "Hello", "Hi", "Greeting", or "New Chat"
 - No quotes, no trailing punctuation
 - Use title case for important words
-- If the exchange is only a greeting or small talk with no real topic yet, respond with {"title": ""}"""
+- If the exchange is only a greeting or small talk with no real topic yet, respond with {"title": ""}
+- Prefer document topics (coverage, renewal, limits, policy, claims) when present in the answer"""
 
 SESSION_TITLE_USER = """Conversation:
 {conversation}

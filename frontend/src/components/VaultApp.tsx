@@ -14,6 +14,7 @@ import {
   DocumentSummary,
   getDocumentInsights,
   getDocumentStatus,
+  getChatHistory,
   isAbortError,
   regenerateDocumentInsights,
   streamChatMessage,
@@ -339,6 +340,27 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+const WEAK_TITLE = /^(?:hi|hello|hey|thanks|thank you|ok|okay|yo|greeting|new chat|chat|help)[\s!.?,:-]*$/i;
+
+function isWeakSidebarTitle(title: string | null | undefined, firstUserMessage?: string): boolean {
+  if (!title) return true;
+  const trimmed = title.trim();
+  if (!trimmed || trimmed.toLowerCase() === "new chat") return true;
+  if (WEAK_TITLE.test(trimmed)) return true;
+  if (firstUserMessage && trimmed.toLowerCase() === firstUserMessage.trim().toLowerCase()) return true;
+  return false;
+}
+
+function pickSidebarTitle(
+  serverTitle: string | null | undefined,
+  firstUserMessage?: string,
+  currentTitle = "New chat",
+): string {
+  if (!isWeakSidebarTitle(serverTitle, firstUserMessage)) return serverTitle!.trim();
+  if (!isWeakSidebarTitle(currentTitle, firstUserMessage) && currentTitle !== "New chat") return currentTitle;
+  return "New chat";
+}
+
 function groupSessionsByDate(sessions: LocalSession[]) {
   const now = Date.now();
   const groups: { label: string; items: LocalSession[] }[] = [];
@@ -438,7 +460,13 @@ export default function VaultApp() {
   useEffect(() => {
     try {
       const stored = localStorage.getItem("vault-sessions");
-      if (stored) setSessions(JSON.parse(stored));
+      if (stored) {
+        const parsed = JSON.parse(stored) as LocalSession[];
+        setSessions(parsed.map((s) => ({
+          ...s,
+          title: isWeakSidebarTitle(s.title) ? "New chat" : s.title,
+        })));
+      }
       const storedActive = localStorage.getItem("vault-active-session");
       if (storedActive) setActiveSessionId(storedActive);
     } catch { /* ignore */ }
@@ -701,8 +729,18 @@ export default function VaultApp() {
 
       if (cancelledRef.current) return;
 
-      if (streamResult.title) {
-        setSessions((p) => p.map((s) => (s.id === sid ? { ...s, title: streamResult.title! } : s)));
+      const firstUserMessage = current.messages.find((m) => m.role === "user")?.content ?? q;
+      let resolvedTitle = pickSidebarTitle(streamResult.title, firstUserMessage, current.title);
+
+      if (serverSid && isWeakSidebarTitle(resolvedTitle, firstUserMessage)) {
+        try {
+          const history = await getChatHistory(serverSid);
+          resolvedTitle = pickSidebarTitle(history.title, firstUserMessage, current.title);
+        } catch { /* keep stream title */ }
+      }
+
+      if (!isWeakSidebarTitle(resolvedTitle, firstUserMessage)) {
+        setSessions((p) => p.map((s) => (s.id === sid ? { ...s, title: resolvedTitle } : s)));
       }
 
       if (!gotTokens) {

@@ -19,6 +19,20 @@ logger = logging.getLogger("app.llm")
 
 _VALID_SENTIMENTS = {"positive", "negative", "neutral", "mixed"}
 
+_MISSING_CONTEXT_ANSWER = re.compile(
+    r"don'?t (?:have|see)|do not (?:have|see)|cannot find|can't find|couldn'?t find|"
+    r"not (?:in|enough)|no (?:information|details|relevant|citation)|"
+    r"unable to (?:find|locate)|isn'?t in the context|"
+    r"share (?:specific|excerpts|sections)|happy to help compare if you",
+    re.IGNORECASE,
+)
+
+_ASSUMES_DOC_CONTENT = re.compile(
+    r"\b(?:compare|summarize|summary|main topics|topics covered|liability clauses|"
+    r"what are the|how do the|across the different|each .+\.pdf)\b",
+    re.IGNORECASE,
+)
+
 
 def _record_llm_usage(operation: str, provider: str, model: str, input_text: str, output_text: str) -> None:
     record_ai_usage_sync(
@@ -364,6 +378,7 @@ def generate_followup_suggestions(
     *,
     document_context: str = "",
     citation_context: str = "",
+    has_citations: bool = False,
 ) -> list[str]:
     """Suggest up to 3 contextual follow-up questions based on the last exchange."""
     settings = get_settings()
@@ -372,27 +387,33 @@ def generate_followup_suggestions(
         "citation_context": citation_context or "No citations in the last answer.",
     }
 
-    if settings.llm_provider == "openai" and settings.openai_api_key:
-        suggestions = _followups_with_openai(question, answer, **kwargs)
-        if suggestions:
-            return suggestions
-    if settings.llm_provider == "gemini" and settings.gemini_api_key:
-        suggestions = _followups_with_gemini(question, answer, **kwargs)
-        if suggestions:
-            return suggestions
+    if not has_citations and _answer_indicates_missing_context(answer, citation_context):
+        return _followup_recovery_fallback(question, kwargs["document_context"])
 
-    return _followup_fallback(question, kwargs.get("document_context", ""))
+    suggestions: list[str] = []
+    if settings.openai_api_key:
+        suggestions = _followups_with_openai(question, answer, **kwargs)
+    if not suggestions and settings.gemini_api_key:
+        suggestions = _followups_with_gemini(question, answer, **kwargs)
+    if not suggestions:
+        suggestions = _followup_fallback(question, kwargs["document_context"])
+
+    return _filter_followup_suggestions(
+        suggestions,
+        answer=answer,
+        has_citations=has_citations,
+    )
 
 
 def generate_session_title(conversation: str) -> str | None:
     """Generate a concise title summarizing the conversation, or None on failure."""
     settings = get_settings()
 
-    if settings.llm_provider == "openai" and settings.openai_api_key:
+    if settings.openai_api_key:
         title = _session_title_with_openai(conversation)
         if title is not None:
             return title
-    if settings.llm_provider == "gemini" and settings.gemini_api_key:
+    if settings.gemini_api_key:
         title = _session_title_with_gemini(conversation)
         if title is not None:
             return title
@@ -526,18 +547,75 @@ def _followups_with_gemini(
     return _parse_followups(content)
 
 
-def _followup_fallback(question: str, document_context: str = "") -> list[str]:
-    doc_names = re.findall(r"- (.+?\.pdf)\b", document_context)
-    if doc_names:
-        first = doc_names[0]
-        second = doc_names[1] if len(doc_names) > 1 else doc_names[0]
+def _answer_indicates_missing_context(answer: str, citation_context: str) -> bool:
+    if citation_context.strip() and "No citations in the last answer" not in citation_context:
+        return False
+    return bool(_MISSING_CONTEXT_ANSWER.search(answer))
+
+
+def _filter_followup_suggestions(
+    suggestions: list[str],
+    *,
+    answer: str,
+    has_citations: bool,
+) -> list[str]:
+    if not suggestions:
+        return []
+    missing_context = not has_citations and _answer_indicates_missing_context(answer, "")
+    filtered: list[str] = []
+    for item in suggestions:
+        text = item.strip()
+        if not text:
+            continue
+        if missing_context and _ASSUMES_DOC_CONTENT.search(text):
+            continue
+        filtered.append(text)
+    if missing_context and not filtered:
+        return _followup_recovery_fallback("", "")[:3]
+    if missing_context and len(filtered) < 3:
+        for item in _followup_recovery_fallback("", ""):
+            if item not in filtered:
+                filtered.append(item)
+            if len(filtered) >= 3:
+                break
+    return filtered[:3]
+
+
+def _followup_recovery_fallback(question: str, document_context: str) -> list[str]:
+    doc_names = re.findall(r"- ([^\n(]+)", document_context)
+    names = [name.strip() for name in doc_names if name.strip()]
+    if len(names) == 1:
+        doc = names[0]
         return [
-            f"Can you summarize the key points from {first}?",
-            f"What dates or deadlines are mentioned in {second}?",
-            f"How do these documents compare on coverage?",
+            f"What coverage details are in {doc}?",
+            "Can you ask about renewal dates or limits?",
+            "Try a narrower question about one policy section",
+        ]
+    if len(names) > 1:
+        return [
+            "Which single document should we focus on first?",
+            "Try asking about coverage limits in one policy",
+            "Can you rephrase with a specific topic to search?",
+        ]
+    return [
+        "Can you rephrase with a more specific topic?",
+        "Which coverage area should I search for?",
+        "Try asking about dates, limits, or named parties",
+    ]
+
+
+def _followup_fallback(question: str, document_context: str = "") -> list[str]:
+    doc_names = re.findall(r"- ([^\n(]+)", document_context)
+    names = [name.strip() for name in doc_names if name.strip()]
+    if names:
+        first = names[0]
+        return [
+            f"What key dates are mentioned in {first}?",
+            f"What coverage limits appear in {first}?",
+            "Can you summarize the main obligations?",
         ]
     return [
         "Can you summarize the key points from my documents?",
         "What dates or deadlines are mentioned?",
-        "How do the documents compare to each other?",
+        "What coverage limits apply?",
     ]

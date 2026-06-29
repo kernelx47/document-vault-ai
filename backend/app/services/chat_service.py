@@ -157,6 +157,7 @@ async def ask_question(
             answer,
             document_context=document_context,
             citation_context=citation_context,
+            has_citations=bool(citations),
         )
     except Exception:
         logger.debug("Followup generation failed — continuing without suggestions", exc_info=True)
@@ -202,6 +203,7 @@ async def stream_question_answer(
                 answer,
                 document_context=document_context,
                 citation_context=citation_context,
+                has_citations=bool(citations),
             )
         except Exception:
             logger.debug("Followup generation failed during stream — continuing without suggestions", exc_info=True)
@@ -338,21 +340,56 @@ async def _build_followup_context(
     return document_context, citation_context
 
 
+_WEAK_TITLE = re.compile(
+    r"^(?:hi|hello|hey|thanks|thank you|ok|okay|yo|greeting|new chat|chat|help)[\s!.?,:-]*$",
+    re.IGNORECASE,
+)
+
+
 def _needs_generated_title(title: str | None) -> bool:
     if not title:
         return True
-    return title.startswith(_AUTO_TITLE_PREFIXES)
+    if title.startswith(_AUTO_TITLE_PREFIXES):
+        return True
+    if _is_weak_title(title):
+        return True
+    return False
 
 
 def _is_trivial_greeting(text: str) -> bool:
     return bool(_TRIVIAL_GREETING.match(text.strip()))
 
 
-def _fallback_session_title(question: str) -> str:
-    question = question.strip()
-    if len(question) <= 80:
-        return question
-    return question[:77] + "..."
+def _is_weak_title(title: str) -> bool:
+    return bool(_WEAK_TITLE.match(title.strip()))
+
+
+def _fallback_title_from_answer(answer: str) -> str | None:
+    text = answer.strip()
+    if len(text) < 24:
+        return None
+    sentence = re.split(r"[.!?\n]", text, maxsplit=1)[0].strip()
+    if len(sentence) < 12 or _is_weak_title(sentence):
+        return None
+    if len(sentence) <= 60:
+        return sentence
+    return sentence[:57] + "..."
+
+
+def _sanitize_generated_title(
+    title: str,
+    *,
+    question: str,
+    all_user_messages: list[str],
+) -> str | None:
+    cleaned = title.strip()
+    if not cleaned or _is_weak_title(cleaned):
+        return None
+    if cleaned.lower() == question.strip().lower():
+        return None
+    if len(all_user_messages) == 1 and cleaned.lower() == all_user_messages[0].strip().lower():
+        return None
+    return cleaned
 
 
 def _format_conversation_for_title(
@@ -390,8 +427,18 @@ async def _maybe_update_session_title(
     except Exception:
         logger.debug("Session title generation failed", exc_info=True)
 
+    if title:
+        title = _sanitize_generated_title(
+            title,
+            question=question,
+            all_user_messages=all_user_messages,
+        )
+
     if not title:
-        title = _fallback_session_title(question)
+        title = _fallback_title_from_answer(answer)
+
+    if not title:
+        return
 
     session.title = title[:512]
 
