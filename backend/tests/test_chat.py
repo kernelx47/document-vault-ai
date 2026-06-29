@@ -38,7 +38,7 @@ async def ready_document(db_session):
 
 @patch("app.services.chat_service.generate_followup_suggestions", return_value=[])
 @patch("app.services.rag_service.generate_answer", new_callable=AsyncMock)
-@patch("app.services.rag_service.retrieve_for_question", new_callable=AsyncMock)
+@patch("app.services.chat_service.retrieve_for_question", new_callable=AsyncMock)
 @pytest.mark.asyncio
 async def test_ask_question_returns_answer_with_citations(
     mock_retrieve,
@@ -76,7 +76,7 @@ async def test_create_chat_session(db_session, ready_document):
 @pytest.mark.asyncio
 async def test_chat_history_persists_messages(_mock_followups, db_session, ready_document):
     document, chunk = ready_document
-    with patch("app.services.rag_service.retrieve_for_question", new=AsyncMock(return_value=[RetrievedChunk(chunk=chunk, score=0.9)])):
+    with patch("app.services.chat_service.retrieve_for_question", new=AsyncMock(return_value=[RetrievedChunk(chunk=chunk, score=0.9)])):
         with patch(
             "app.services.rag_service.generate_answer",
             new=AsyncMock(return_value="The renewal date is December 2025 [Source 1]."),

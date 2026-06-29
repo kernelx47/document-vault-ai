@@ -80,7 +80,7 @@ async def test_retrieve_chunks_filters_low_similarity(
     await db_session.commit()
 
     provider = MagicMock()
-    provider.embed_query.return_value = [1.0] + [0.0] * 383
+    provider.embed_query.return_value = [0.0, 1.0] + [0.0] * 382
     mock_get_provider.return_value = provider
 
     retrieved = await retrieve_chunks(db_session, [document.id], "Unrelated question")

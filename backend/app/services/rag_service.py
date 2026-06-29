@@ -179,10 +179,14 @@ async def generate_rag_answer(
     document_ids: list[UUID],
     question: str,
     history_messages: list[ChatMessage],
+    *,
+    retrieved: list[RetrievedChunk] | None = None,
 ) -> tuple[str, list[Citation], list[UUID]]:
-    retrieved = await retrieve_for_question(db, document_ids, question, history_messages)
-    answer = await generate_answer(question, history_messages, retrieved)
-    return finalize_rag_answer(retrieved, answer)
+    chunks = retrieved
+    if chunks is None:
+        chunks = await retrieve_for_question(db, document_ids, question, history_messages)
+    answer = await generate_answer(question, history_messages, chunks)
+    return finalize_rag_answer(chunks, answer)
 
 
 async def prepare_rag_prompt(

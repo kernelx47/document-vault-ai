@@ -45,8 +45,8 @@ async def processing_metrics(db: AsyncSession = Depends(get_db)) -> ProcessingMe
     summary="System performance metrics",
     response_description="API latency, queue depth, throughput, and failure rates.",
     description=(
-        "Operational performance snapshot: API latency, worker queue depth, "
-        "documents processed per hour, and failure rates."
+        "Operational performance snapshot: API latency (avg and p95), per-route breakdown, "
+        "worker queue depth, documents processed per hour, failure rates, and chat/RAG metrics."
     ),
 )
 async def system_metrics(db: AsyncSession = Depends(get_db)) -> SystemMetricsResponse:

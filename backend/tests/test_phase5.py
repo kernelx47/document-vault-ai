@@ -50,7 +50,7 @@ async def test_create_multi_document_chat_session(db_session, two_ready_document
 
 @patch("app.services.chat_service.generate_followup_suggestions", return_value=["Follow up?"])
 @patch("app.services.rag_service.generate_answer", new_callable=AsyncMock)
-@patch("app.services.rag_service.retrieve_for_question", new_callable=AsyncMock)
+@patch("app.services.chat_service.retrieve_for_question", new_callable=AsyncMock)
 @pytest.mark.asyncio
 async def test_multi_document_question_uses_all_document_ids(
     mock_retrieve,
@@ -86,7 +86,7 @@ async def test_multi_document_question_uses_all_document_ids(
 
 
 @patch("app.services.chat_service.langchain_stream_answer")
-@patch("app.services.rag_service.retrieve_for_question", new_callable=AsyncMock)
+@patch("app.services.chat_service.retrieve_for_question", new_callable=AsyncMock)
 @pytest.mark.asyncio
 async def test_stream_question_answer_yields_tokens(
     mock_retrieve,

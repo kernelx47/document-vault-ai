@@ -19,6 +19,25 @@ class DocumentMetricsResponse(BaseModel):
     total_chunks: int = Field(default=0, description="Total indexed chunks across all documents.")
 
 
+class RouteLatencyMetrics(BaseModel):
+    route: str = Field(description="HTTP method and normalized path (UUIDs replaced with `{id}`).")
+    avg_duration_ms: float | None = Field(default=None, description="Average response time for this route.")
+    p95_duration_ms: float | None = Field(default=None, description="95th percentile response time for this route.")
+    sample_count: int = Field(default=0, description="Number of latency samples for this route.")
+
+
+class ChatMetrics(BaseModel):
+    total_requests: int = Field(default=0, description="Chat/RAG requests in the rolling sample window.")
+    error_count: int = Field(default=0, description="Chat/RAG requests that failed in the sample window.")
+    error_rate: float = Field(ge=0.0, le=1.0, description="Ratio of failed chat/RAG requests (0.0–1.0).")
+    avg_rag_duration_ms: float | None = Field(
+        default=None, description="Average end-to-end RAG answer time in milliseconds."
+    )
+    avg_retrieval_duration_ms: float | None = Field(
+        default=None, description="Average vector retrieval time in milliseconds."
+    )
+
+
 class StageMetrics(BaseModel):
     stage: str = Field(description="Pipeline stage name (e.g. extract, embed).")
     completed: int = Field(default=0, description="Jobs completed at this stage.")
@@ -49,9 +68,19 @@ class SystemMetricsResponse(BaseModel):
     avg_api_latency_ms: float | None = Field(
         default=None, description="Rolling average API response time in milliseconds."
     )
+    p95_api_latency_ms: float | None = Field(
+        default=None, description="95th percentile API response time in milliseconds."
+    )
     api_request_samples: int = Field(default=0, description="Number of requests in the latency sample.")
+    api_latency_by_route: list[RouteLatencyMetrics] = Field(
+        default_factory=list,
+        description="Per-route latency breakdown (UUID path segments normalized to `{id}`).",
+    )
     worker_queue_depth: int = Field(default=0, description="Pending Celery tasks in the queue.")
-    documents_per_hour: int = Field(default=0, description="Documents successfully processed in the last hour.")
+    documents_processed_per_hour: int = Field(
+        default=0,
+        description="Documents that finished processing (ready or failed) in the last hour.",
+    )
     document_failure_rate: float = Field(
         ge=0.0, le=1.0, description="Ratio of documents with `failed` status."
     )
@@ -65,3 +94,4 @@ class SystemMetricsResponse(BaseModel):
         default_factory=list,
         description="Average duration per pipeline stage.",
     )
+    chat: ChatMetrics = Field(description="Rolling chat/RAG performance metrics.")

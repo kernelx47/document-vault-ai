@@ -23,7 +23,11 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             duration_ms = round((time.perf_counter() - started) * 1000, 2)
             if request.url.path.startswith("/api/"):
                 try:
-                    await record_api_latency(duration_ms)
+                    await record_api_latency(
+                        duration_ms,
+                        method=request.method,
+                        path=request.url.path,
+                    )
                 except Exception:
                     logger.debug("failed to record api latency", exc_info=True)
             logger.info(

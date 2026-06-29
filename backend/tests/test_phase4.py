@@ -44,12 +44,15 @@ def test_openapi_endpoints_have_summaries(client: TestClient):
     paths = schema["paths"]
     expected_paths = [
         "/api/v1/documents/upload",
+        "/api/v1/documents/upload/batch",
         "/api/v1/documents",
         "/api/v1/documents/{document_id}/status",
         "/api/v1/documents/{document_id}/insights",
         "/api/v1/chat/sessions",
         "/api/v1/chat/sessions/{session_id}/messages",
+        "/api/v1/chat/sessions/{session_id}/messages/stream",
         "/api/v1/metrics/documents",
+        "/api/v1/metrics/processing",
         "/api/v1/metrics/system",
         "/api/v1/health",
     ]
@@ -57,6 +60,24 @@ def test_openapi_endpoints_have_summaries(client: TestClient):
         for method, operation in paths[path].items():
             assert operation.get("summary"), f"{method.upper()} {path} missing summary"
             assert operation.get("description"), f"{method.upper()} {path} missing description"
+
+
+def test_openapi_streaming_has_sse_example(client: TestClient):
+    stream_post = client.get("/openapi.json").json()["paths"][
+        "/api/v1/chat/sessions/{session_id}/messages/stream"
+    ]["post"]
+    content = stream_post["responses"]["200"]["content"]["text/event-stream"]
+    assert "token" in content["example"]
+    assert "done" in content["example"]
+
+
+def test_openapi_system_metrics_has_examples(client: TestClient):
+    schema = client.get("/openapi.json").json()["components"]["schemas"]["SystemMetricsResponse"]
+    assert schema["examples"]
+    example = schema["examples"][0]
+    assert "p95_api_latency_ms" in example
+    assert "documents_processed_per_hour" in example
+    assert "chat" in example
 
 
 def test_openapi_documents_upload_documents_error_responses(client: TestClient):

@@ -176,9 +176,24 @@ HEALTH_EXAMPLE = {
 
 SYSTEM_METRICS_EXAMPLE = {
     "avg_api_latency_ms": 42.5,
+    "p95_api_latency_ms": 118.0,
     "api_request_samples": 128,
+    "api_latency_by_route": [
+        {
+            "route": "GET /api/v1/documents/{id}/status",
+            "avg_duration_ms": 18.2,
+            "p95_duration_ms": 45.0,
+            "sample_count": 64,
+        },
+        {
+            "route": "POST /api/v1/chat/sessions/{id}/messages",
+            "avg_duration_ms": 920.5,
+            "p95_duration_ms": 1450.0,
+            "sample_count": 22,
+        },
+    ],
     "worker_queue_depth": 2,
-    "documents_per_hour": 5,
+    "documents_processed_per_hour": 5,
     "document_failure_rate": 0.0833,
     "processing_failure_rate": 0.0625,
     "avg_processing_duration_ms": 820.5,
@@ -186,4 +201,17 @@ SYSTEM_METRICS_EXAMPLE = {
         {"stage": "extract", "completed": 10, "failed": 0, "avg_duration_ms": 450.0},
         {"stage": "embed", "completed": 10, "failed": 0, "avg_duration_ms": 1200.0},
     ],
+    "chat": {
+        "total_requests": 48,
+        "error_count": 2,
+        "error_rate": 0.0417,
+        "avg_rag_duration_ms": 890.0,
+        "avg_retrieval_duration_ms": 120.5,
+    },
 }
+
+CHAT_STREAM_SSE_EXAMPLE = (
+    'data: {"token": "The"}\n\n'
+    'data: {"token": " renewal"}\n\n'
+    'data: {"done": true}\n\n'
+)

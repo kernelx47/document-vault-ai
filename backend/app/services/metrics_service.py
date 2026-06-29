@@ -5,12 +5,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Document, DocumentStatus, ProcessingJob, ProcessingJobStatus
 from app.schemas.metrics import (
+    ChatMetrics,
     DocumentMetricsResponse,
     ProcessingMetricsResponse,
     StageMetrics,
     SystemMetricsResponse,
 )
 from app.services.api_latency import get_api_latency_stats
+from app.services.rag_metrics import get_chat_metrics
 from app.services.worker_health import get_worker_queue_depth
 
 
@@ -85,14 +87,20 @@ async def get_processing_metrics(db: AsyncSession) -> ProcessingMetricsResponse:
 
 
 async def get_system_metrics(db: AsyncSession) -> SystemMetricsResponse:
-    avg_api_latency_ms, api_request_samples = await get_api_latency_stats()
+    avg_api_latency_ms, p95_api_latency_ms, api_request_samples, api_latency_by_route = (
+        await get_api_latency_stats()
+    )
     worker_queue_depth = await get_worker_queue_depth()
+    chat_total, chat_errors, chat_error_rate, avg_rag_ms, avg_retrieval_ms = await get_chat_metrics()
 
     one_hour_ago = datetime.now(UTC) - timedelta(hours=1)
-    documents_last_hour = await db.scalar(
+    documents_processed_last_hour = await db.scalar(
         select(func.count())
         .select_from(Document)
-        .where(Document.created_at >= one_hour_ago)
+        .where(
+            Document.processing_completed_at.isnot(None),
+            Document.processing_completed_at >= one_hour_ago,
+        )
     )
 
     status_result = await db.execute(
@@ -107,11 +115,20 @@ async def get_system_metrics(db: AsyncSession) -> SystemMetricsResponse:
 
     return SystemMetricsResponse(
         avg_api_latency_ms=avg_api_latency_ms,
+        p95_api_latency_ms=p95_api_latency_ms,
         api_request_samples=api_request_samples,
+        api_latency_by_route=api_latency_by_route,
         worker_queue_depth=worker_queue_depth,
-        documents_per_hour=int(documents_last_hour or 0),
+        documents_processed_per_hour=int(documents_processed_last_hour or 0),
         document_failure_rate=document_failure_rate,
         processing_failure_rate=processing.failure_rate,
         avg_processing_duration_ms=processing.avg_duration_ms,
         stage_avg_duration_ms=processing.by_stage,
+        chat=ChatMetrics(
+            total_requests=chat_total,
+            error_count=chat_errors,
+            error_rate=chat_error_rate,
+            avg_rag_duration_ms=avg_rag_ms,
+            avg_retrieval_duration_ms=avg_retrieval_ms,
+        ),
     )

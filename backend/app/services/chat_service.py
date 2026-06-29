@@ -1,4 +1,5 @@
 import logging
+import time
 import uuid
 from collections.abc import AsyncIterator
 
@@ -30,6 +31,7 @@ from app.schemas.chat import (
     MultiChatSessionCreateRequest,
 )
 from app.services.rag_service import finalize_rag_answer, generate_rag_answer, retrieve_for_question
+from app.services.rag_metrics import record_chat_request
 
 logger = logging.getLogger("app.chat")
 
@@ -103,20 +105,38 @@ async def ask_question(
 ) -> ChatMessageResponse:
     session, history_messages, question = await _prepare_question(db, session_id, payload)
     document_ids = await _get_session_document_ids(db, session)
+    started = time.perf_counter()
+    retrieval_ms: float | None = None
+    success = False
 
     try:
+        retrieve_started = time.perf_counter()
+        retrieved = await retrieve_for_question(db, document_ids, question, history_messages)
+        retrieval_ms = round((time.perf_counter() - retrieve_started) * 1000, 2)
         answer, citations, chunk_ids = await generate_rag_answer(
             db,
             document_ids,
             question,
             history_messages,
+            retrieved=retrieved,
         )
+        success = True
     except Exception:
         logger.exception("RAG answer generation failed for session %s", session_id)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Failed to generate answer. Please try again.",
         )
+    finally:
+        duration_ms = round((time.perf_counter() - started) * 1000, 2)
+        try:
+            await record_chat_request(
+                duration_ms=duration_ms,
+                retrieval_ms=retrieval_ms,
+                success=success,
+            )
+        except Exception:
+            logger.debug("Failed to record chat metrics", exc_info=True)
 
     answer = await check_output_async(answer)
 
@@ -141,28 +161,45 @@ async def stream_question_answer(
 ) -> AsyncIterator[str]:
     session, history_messages, question = await _prepare_question(db, session_id, payload)
     document_ids = await _get_session_document_ids(db, session)
+    started = time.perf_counter()
+    retrieval_ms: float | None = None
+    success = False
 
-    retrieved = await retrieve_for_question(db, document_ids, question, history_messages)
-
-    answer_parts: list[str] = []
-    async for token in langchain_stream_answer(question, history_messages, retrieved):
-        answer_parts.append(token)
-        yield token
-
-    answer = "".join(answer_parts).strip() or "I don't have enough information in these documents."
-    answer, citations, chunk_ids = finalize_rag_answer(retrieved, answer)
-    answer = await check_output_async(answer)
     try:
-        followups = generate_followup_suggestions(question, answer)
-    except Exception:
-        logger.debug("Followup generation failed during stream — continuing without suggestions", exc_info=True)
-        followups = []
-    assistant_message = await _save_assistant_message(
-        db, session, answer, citations, chunk_ids, followups
-    )
-    session.title = session.title or question[:80]
-    await db.commit()
-    await db.refresh(assistant_message)
+        retrieve_started = time.perf_counter()
+        retrieved = await retrieve_for_question(db, document_ids, question, history_messages)
+        retrieval_ms = round((time.perf_counter() - retrieve_started) * 1000, 2)
+
+        answer_parts: list[str] = []
+        async for token in langchain_stream_answer(question, history_messages, retrieved):
+            answer_parts.append(token)
+            yield token
+
+        answer = "".join(answer_parts).strip() or "I don't have enough information in these documents."
+        answer, citations, chunk_ids = finalize_rag_answer(retrieved, answer)
+        answer = await check_output_async(answer)
+        try:
+            followups = generate_followup_suggestions(question, answer)
+        except Exception:
+            logger.debug("Followup generation failed during stream — continuing without suggestions", exc_info=True)
+            followups = []
+        assistant_message = await _save_assistant_message(
+            db, session, answer, citations, chunk_ids, followups
+        )
+        session.title = session.title or question[:80]
+        await db.commit()
+        await db.refresh(assistant_message)
+        success = True
+    finally:
+        duration_ms = round((time.perf_counter() - started) * 1000, 2)
+        try:
+            await record_chat_request(
+                duration_ms=duration_ms,
+                retrieval_ms=retrieval_ms,
+                success=success,
+            )
+        except Exception:
+            logger.debug("Failed to record chat metrics", exc_info=True)
 
 
 async def get_chat_history(db: AsyncSession, session_id: uuid.UUID) -> ChatHistoryResponse:

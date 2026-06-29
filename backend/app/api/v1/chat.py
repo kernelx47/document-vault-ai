@@ -16,6 +16,7 @@ from app.schemas.chat import (
     ChatSessionDetail,
     MultiChatSessionCreateRequest,
 )
+from app.schemas.openapi_examples import CHAT_STREAM_SSE_EXAMPLE
 from app.schemas.openapi_responses import (
     CHAT_MESSAGE_RESPONSES,
     CHAT_SESSION_RESPONSES,
@@ -91,7 +92,20 @@ async def send_chat_message(
         "Each event is JSON: `{\"token\": \"...\"}` until `{\"done\": true}`. "
         "Errors are sent as `{\"error\": \"...\"}` events."
     ),
-    responses=merge_responses(CHAT_MESSAGE_RESPONSES, RESPONSE_422),
+    responses=merge_responses(
+        CHAT_MESSAGE_RESPONSES,
+        RESPONSE_422,
+        {
+            200: {
+                "description": "SSE stream of JSON token events",
+                "content": {
+                    "text/event-stream": {
+                        "example": CHAT_STREAM_SSE_EXAMPLE,
+                    }
+                },
+            }
+        },
+    ),
 )
 async def stream_chat_message(
     session_id: UUID,

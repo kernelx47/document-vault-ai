@@ -1,12 +1,13 @@
 import logging
+from typing import Literal
 
-from fastapi import APIRouter
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Response
 from redis.asyncio import Redis
 from sqlalchemy import text
 
 from app.config import get_settings
 from app.db.session import engine
+from app.schemas.health import HealthResponse
 from app.schemas.openapi_examples import HEALTH_EXAMPLE
 from app.services.worker_health import check_worker
 
@@ -14,7 +15,7 @@ router = APIRouter()
 logger = logging.getLogger("app.health")
 
 
-async def _check_database() -> str:
+async def _check_database() -> Literal["ok", "error"]:
     try:
         async with engine.connect() as connection:
             await connection.execute(text("SELECT 1"))
@@ -24,7 +25,7 @@ async def _check_database() -> str:
         return "error"
 
 
-async def _check_redis() -> str:
+async def _check_redis() -> Literal["ok", "error"]:
     settings = get_settings()
     client = Redis.from_url(settings.redis_url)
     try:
@@ -41,6 +42,7 @@ async def _check_redis() -> str:
 
 @router.get(
     "/health",
+    response_model=HealthResponse,
     summary="Health check",
     response_description="Connectivity status for API, database, Redis, and Celery worker.",
     description=(
@@ -48,30 +50,31 @@ async def _check_redis() -> str:
         "Returns `503` when any dependency is unhealthy (`status: degraded`)."
     ),
     responses={
-        200: {"content": {"application/json": {"example": HEALTH_EXAMPLE}}},
         503: {
             "description": "One or more dependencies are unhealthy",
             "content": {
                 "application/json": {
-                    "example": {**HEALTH_EXAMPLE, "database": "error", "status": "degraded"}
+                    "schema": {"$ref": "#/components/schemas/HealthResponse"},
+                    "example": {**HEALTH_EXAMPLE, "database": "error", "status": "degraded"},
                 }
             },
         },
     },
 )
-async def health_check() -> JSONResponse:
+async def health_check(response: Response) -> HealthResponse:
     database = await _check_database()
     redis = await _check_redis()
     worker = await check_worker()
     is_healthy = database == "ok" and redis == "ok" and worker == "ok"
 
-    checks = {
-        "service": "document-vault-ai",
-        "api": "ok",
-        "database": database,
-        "redis": redis,
-        "worker": worker,
-        "status": "ok" if is_healthy else "degraded",
-    }
+    if not is_healthy:
+        response.status_code = 503
 
-    return JSONResponse(content=checks, status_code=200 if is_healthy else 503)
+    return HealthResponse(
+        service="document-vault-ai",
+        api="ok",
+        database=database,
+        redis=redis,
+        worker=worker,  # type: ignore[arg-type]
+        status="ok" if is_healthy else "degraded",
+    )

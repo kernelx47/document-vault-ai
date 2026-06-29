@@ -9,7 +9,11 @@ Upload PDF or DOCX documents, wait for async processing, then chat with your doc
 2. **Poll status** — `GET /documents/{id}/status` until `status` is `ready` (or `failed`).
 3. **Insights** — `GET /documents/{id}/insights` for AI summary and bullet points.
 4. **Chat** — `POST /documents/{id}/chat/sessions`, then `POST /chat/sessions/{id}/messages`.
-5. **Monitor** — `GET /metrics/documents` and `GET /health` for operational visibility.
+5. **Monitor** — `GET /metrics/system`, `GET /metrics/documents`, and `GET /health` for operational visibility.
+
+## Authentication
+
+This API is open for local/demo use. No authentication headers are required. Do not expose it publicly without adding auth, TLS, and rate limits appropriate to your environment.
 
 ## Document status lifecycle
 
